@@ -1,6 +1,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
+// SpriteSheet
 const spriteSheet = new Image();
 spriteSheet.src = "img/sprisheet.png";
 
@@ -28,6 +29,15 @@ luckBlockBeatenImage.src = "img/luck_block_beaten.png";
 // Imagem do bloco de tijolos batido
 const brickTileBeatenImage = new Image();
 brickTileBeatenImage.src = "img/brick_tile_beaten.png";
+// Imagem para obstáculo flutuante (mandacaru com textura)
+const obstacleImage = new Image();
+obstacleImage.src = "img/obstacle.png";
+// Imagem da bandeira
+const flagImage = new Image();
+flagImage.src = "img/flag.png";
+// Imagem da estrutura Python (cobra estilizada)
+const pythonStructureImage = new Image();
+pythonStructureImage.src = "img/python_structure.png";
 
 // --- CONFIGURAÇÕES GERAIS ---
 const TILE_SIZE = 40;
@@ -37,6 +47,7 @@ const SPEED = 2.5; // Reduzido de 5 para mais controle
 
 // --- ESTADO DO JOGO ---
 let gameActive = false;
+let gameWon = false; // Novo: controla se o player venceu
 let score = 0;
 let animationId;
 let powerUps = []; // Array de power-ups ativos no mapa
@@ -47,24 +58,198 @@ let cameraX = 0;
 // --- ESTADO DAS TECLAS ---
 const keys = { right: false, left: false, up: false };
 
-// --- MAPA EXPANDIDO (Caatinga) ---
-// 0: Vazio, 1: Chão (Terra), 2: Bloco Tijolos, 3: Bloco Tijolos Batido, 4: Mandacaru, 5: Bloco Sorte, 6: Bloco Sorte Batido
-const map = [
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,0,0,2,0,0,0,5,3,2,0,0,0,0,0,0,0,2,3,5,0,0,0,0,0,0,0,2,2,5,0,0,0,0,0,0,0], 
-    [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-    [0,0,0,0,4,0,0,0,0,4,0,0,0,0,0,4,0,0,0,0,4,0,0,0,0,4,0,0,0,0,4,0,0,0,0,4,0,0,0,0],
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,5],
-    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,5]
-];
+// --- TIPOS DE BLOCOS ---
+// 0: Vazio
+// 1: Chão (Terra)
+// 2: Bloco Tijolos (intacto)
+// 3: Bloco Tijolos (batido)
+// 4: Mandacaru (obstáculo flutuante)
+// 5: Bloco Sorte (intacto)
+// 6: Bloco Sorte (batido)
+// 7: Bandeira (vitória)
+// 8+: Estruturas grandes (suporte e Python)
+
+// --- MAPA GERADO PROCEDURALMENTE ---
+let map = [];
+
+function generateMap() {
+    const mapWidth = 300;
+    const mapHeight = 14;
+    map = [];
+    
+    // Inicializa com céu vazio
+    for (let row = 0; row < mapHeight; row++) {
+        map[row] = new Array(mapWidth).fill(0);
+    }
+    
+    // SEÇÃO INICIAL SEGURA (colunas 0-50): Chão sólido com plataformas progressivas
+    for (let col = 0; col < 50; col++) {
+        map[10][col] = 1;
+        map[11][col] = 1;
+        
+        // Plataformas flutuantes simples e próximas
+        if (col > 20 && col < 45) {
+            if (col % 10 === 0) {
+                map[7][col] = 2;
+                map[7][col + 1] = 2;
+            }
+            if (col % 10 === 3) {
+                map[8][col] = 2;
+                map[8][col + 1] = 2;
+            }
+        }
+    }
+    
+    // SEÇÃO FÁCIL-MÉDIA (colunas 50-150): Progressão constante
+    for (let col = 50; col < 150; col++) {
+        const sectionProg = (col - 50) / 100; // 0 a 1
+        
+        // Chão: começa contínuo, vai ficando com mais buracos
+        const groundChance = 0.9 - sectionProg * 0.4; // 90% -> 50%
+        if (Math.random() < groundChance) {
+            map[10][col] = 1;
+            map[11][col] = 1;
+        }
+        
+        // Plataformas flutuantes em SEQUÊNCIAS PRÓXIMAS
+        // A cada 12-15 colunas, colocar um grupo de plataformas
+        const groupPeriod = 12;
+        const colInGroup = (col - 50) % groupPeriod;
+        
+        if (colInGroup === 0 && Math.random() < 0.8) {
+            // Grupo de 3-4 blocos flutuantes próximos
+            const groupSize = 3;
+            const startRow = Math.random() < 0.5 ? 7 : 8;
+            
+            for (let i = 0; i < groupSize; i++) {
+                if (col + i < 150 && !map[startRow][col + i]) {
+                    const tileType = Math.random() < 0.2 ? 5 : 2;
+                    map[startRow][col + i] = tileType;
+                    
+                    // Adicionar um bloco intermediário para criar "escada"
+                    if (i > 0 && startRow > 6 && Math.random() < 0.4) {
+                        const intermediateRow = startRow + 1;
+                        if (!map[intermediateRow][col + i - 1]) {
+                            map[intermediateRow][col + i - 1] = 2;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Mandacaru ocasional
+        if (col % 18 === 0 && Math.random() < 0.6) {
+            map[9][col] = 4;
+        }
+    }
+    
+    // SEÇÃO MÉDIA-DIFÍCIL (colunas 150-240): Mais desafio
+    for (let col = 150; col < 240; col++) {
+        const sectionProg = (col - 150) / 90; // 0 a 1
+        
+        // Chão com mais buracos: 50% -> 30%
+        const groundChance = 0.50 - sectionProg * 0.2;
+        if (Math.random() < groundChance) {
+            map[10][col] = 1;
+            map[11][col] = 1;
+        }
+        
+        // Plataformas flutuantes MAIS FREQUENTES
+        const groupPeriod = 10;
+        const colInGroup = (col - 150) % groupPeriod;
+        
+        if (colInGroup === 0 && Math.random() < 0.85) {
+            const groupSize = 3;
+            const startRow = 6 + Math.floor(Math.random() * 3); // Variar altura
+            
+            for (let i = 0; i < groupSize; i++) {
+                if (col + i < 240 && !map[startRow][col + i]) {
+                    const tileType = Math.random() < 0.25 ? 5 : 2;
+                    map[startRow][col + i] = tileType;
+                    
+                    // IMPORTANTE: Adicionar blocos intermediários para criar "escada"
+                    if (i > 0 && startRow > 6) {
+                        const intermediateRow = startRow + 1;
+                        if (!map[intermediateRow][col + i - 1] && Math.random() < 0.6) {
+                            map[intermediateRow][col + i - 1] = 2;
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Mandacaru frequente
+        if (Math.random() < 0.15) {
+            map[9][col] = 4;
+        }
+    }
+    
+    // SEÇÃO FINAL (colunas 240-300): Preparação para objetivo
+    for (let col = 240; col < 270; col++) {
+        // Chão ocasional
+        if (Math.random() < 0.45) {
+            map[10][col] = 1;
+            map[11][col] = 1;
+        }
+        
+        // Muitas plataformas flutuantes MUITO PRÓXIMAS
+        if (col % 8 === 0 && Math.random() < 0.8) {
+            const groupSize = 3;
+            const startRow = 6 + Math.floor(Math.random() * 3);
+            
+            for (let i = 0; i < groupSize; i++) {
+                if (col + i < 270 && !map[startRow][col + i]) {
+                    map[startRow][col + i] = Math.random() < 0.3 ? 5 : 2;
+                    
+                    // Escadas bem definidas
+                    if (i > 0 && startRow > 6 && Math.random() < 0.7) {
+                        const intermediateRow = startRow + 1;
+                        if (!map[intermediateRow][col + i - 1]) {
+                            map[intermediateRow][col + i - 1] = 2;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Recta final reta para a bandeira (colunas 270-290)
+    for (let col = 270; col < 290; col++) {
+        map[10][col] = 1;
+        map[11][col] = 1;
+    }
+    
+    // Estrutura Final: Bandeira e Python
+    const flagCol = 290;
+    const flagRow = 9;
+    
+    // Bandeira NO TOPO
+    map[flagRow][flagCol] = 7;
+    
+    // Chão abaixo
+    map[flagRow + 1][flagCol] = 1;
+    
+    // Estrutura Python grande
+    const pythonCol = flagCol + 5;
+    const pythonHeight = 5;
+    const pythonWidth = 8;
+    
+    for (let py = 0; py < pythonHeight; py++) {
+        for (let px = 0; px < pythonWidth; px++) {
+            if (flagRow + 1 + py < mapHeight && pythonCol + px < mapWidth) {
+                map[flagRow + 1 + py][pythonCol + px] = 20;
+            }
+        }
+    }
+    
+    // Suporte grande abaixo
+    const supportRow = flagRow + pythonHeight + 1;
+    for (let sx = -8; sx < 15; sx++) {
+        if (flagCol + sx >= 0 && flagCol + sx < mapWidth && supportRow < mapHeight) {
+            map[supportRow][flagCol + sx] = 21;
+        }
+    }
+}
 
 // --- CLASSES ---
 
@@ -138,6 +323,13 @@ class Player {
                     if (this.x < tx + TILE_SIZE && this.x + this.width > tx &&
                         this.y < ty + TILE_SIZE && this.y + this.height > ty) {
                         
+                        // BANDEIRA - detecta vitória sem bloquear movimento
+                        if (tile === 7) {
+                            score += 1000; // Bônus final
+                            winGame();
+                            return; // Sai da função
+                        }
+                        
                         // Bater a cabeça (Baixo para cima) - APENAS se o personagem está abaixo e bate para cima
                         // Personagem tem height ~55, TILE_SIZE é 40, então condição rigorosa: deve estar bem abaixo
                         if (this.vy < 0 && this.y + this.height > ty + TILE_SIZE * 0.8) {
@@ -155,8 +347,8 @@ class Player {
                                 score += 150;
                                 map[row][col] = 6; // Marca como batido
                                 
-                                // 35% de chance de gerar power-up
-                                if (Math.random() < 0.35) {
+                                // 50% de chance de gerar power-up - aumentado de 35%
+                                if (Math.random() < 0.50) {
                                     powerUps.push(new PowerUp(tx, ty));
                                 }
                             }
@@ -167,8 +359,8 @@ class Player {
                             this.y = ty - this.height;
                             this.onGround = true;
                         }
-                        // Empurrão lateral
-                        else {
+                        // Empurrão lateral - NÃO bloqueia bandeira (7) nem estrutura Python (9)
+                        else if (tile !== 7 && tile !== 9) {
                             if (this.vx > 0) this.x = tx - this.width;
                             if (this.vx < 0) this.x = tx + TILE_SIZE;
                         }
@@ -217,13 +409,45 @@ class Enemy {
 
     update() {
         this.x += this.vx;
+        
+        // Verifica colisão com blocos
+        this.checkBlockCollisions();
+        
         // Inverte direção se sair muito do mapa
         if (this.x < 0) {
-            this.vx = 1; // Reduzido de 2 para mais lentidão
+            this.vx = 1;
             this.facing = 1;
         } else if (this.x > map[0].length * TILE_SIZE - this.width) {
-            this.vx = -1; // Reduzido de -2 para mais lentidão
+            this.vx = -1;
             this.facing = -1;
+        }
+    }
+    
+    checkBlockCollisions() {
+        for (let row = 0; row < map.length; row++) {
+            for (let col = 0; col < map[row].length; col++) {
+                let tile = map[row][col];
+                if (tile !== 0) {
+                    let tx = col * TILE_SIZE;
+                    let ty = row * TILE_SIZE;
+                    
+                    // Detecção AABB
+                    if (this.x < tx + TILE_SIZE && this.x + this.width > tx &&
+                        this.y < ty + TILE_SIZE && this.y + this.height > ty) {
+                        
+                        // Empurrão lateral - inimigo não atravessa blocos
+                        if (this.vx > 0) {
+                            this.x = tx - this.width;
+                            this.vx = -1;
+                            this.facing = -1;
+                        } else if (this.vx < 0) {
+                            this.x = tx + TILE_SIZE;
+                            this.vx = 1;
+                            this.facing = 1;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -318,8 +542,9 @@ let enemies = [];
 function initEnemies() {
     enemies = [
         new Enemy(600, 370), 
-        new Enemy(1200, 370), 
-        new Enemy(1800, 370)
+        new Enemy(1800, 370), 
+        new Enemy(3200, 370),
+        new Enemy(4500, 370)
     ];
     powerUps = []; // Reseta power-ups ao iniciar
 }
@@ -338,8 +563,22 @@ function drawMap() {
             if (tx - cameraX > -TILE_SIZE && tx - cameraX < canvas.width) {
                 
                 if (tile === 1) { 
-                    // Chão - sempre usa spriteSheet para consistência
-                    ctx.drawImage(spriteSheet, 100, 0, 40, 40, tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                    // Chão - tenta usar spriteSheet, senão fallback
+                    if (spriteSheet.complete && spriteSheet.naturalWidth !== 0) {
+                        ctx.drawImage(spriteSheet, 100, 0, 40, 40, tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                    } else {
+                        // Fallback: desenha padrão de terra
+                        ctx.fillStyle = "#8B7355";
+                        ctx.fillRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                        ctx.strokeStyle = "#654321";
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                        // Textura simples
+                        ctx.fillStyle = "rgba(0,0,0,0.1)";
+                        for (let i = 0; i < 3; i++) {
+                            ctx.fillRect(tx - cameraX + Math.random() * TILE_SIZE, ty + Math.random() * TILE_SIZE, 5, 5);
+                        }
+                    }
                 }
                 else if (tile === 2) { 
                     // Bloco Tijolos (intacto) - tenta usar textura customizada
@@ -368,8 +607,19 @@ function drawMap() {
                     }
                 }
                 else if (tile === 4) { 
-                    // Mandacaru
-                    ctx.drawImage(spriteSheet, 220, 0, 40, 80, tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                    // Mandacaru - melhorado com textura customizada
+                    if (obstacleImage.complete && obstacleImage.naturalWidth !== 0) {
+                        ctx.drawImage(obstacleImage, tx - cameraX, ty - TILE_SIZE, TILE_SIZE, TILE_SIZE * 2);
+                    } else {
+                        // Fallback: desenho verde (mandacaru)
+                        ctx.fillStyle = "#228B22";
+                        ctx.fillRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                        // Picos do mandacaru
+                        ctx.fillStyle = "#006400";
+                        for (let i = 0; i < 4; i++) {
+                            ctx.fillRect(tx - cameraX + i * 10, ty - 5, 5, 10);
+                        }
+                    }
                 }
                 else if (tile === 5) {
                     // Bloco da Sorte (intacto) - sempre tenta usar textura
@@ -402,6 +652,54 @@ function drawMap() {
                         ctx.strokeRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
                     }
                 }
+                else if (tile === 7) {
+                    // Bandeira (objetivo final) - desenha mastro e bandeira ACIMA do bloco
+                    if (flagImage.complete && flagImage.naturalWidth !== 0) {
+                        ctx.drawImage(flagImage, tx - cameraX, ty - TILE_SIZE * 2.5, TILE_SIZE, TILE_SIZE * 3);
+                    } else {
+                        // Fallback: desenha bandeira com cores
+                        // Mastro
+                        ctx.fillStyle = "#8B7355";
+                        ctx.fillRect(tx - cameraX + TILE_SIZE / 2 - 3, ty - TILE_SIZE * 2, 6, TILE_SIZE * 2);
+                        // Bandeira vermelha
+                        ctx.fillStyle = "#FF0000";
+                        ctx.fillRect(tx - cameraX + TILE_SIZE / 2 + 3, ty - TILE_SIZE * 2 + 5, 15, 10);
+                        ctx.strokeStyle = "#CC0000";
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(tx - cameraX + TILE_SIZE / 2 + 3, ty - TILE_SIZE * 2 + 5, 15, 10);
+                    }
+                }
+                else if (tile === 20) {
+                    // ESTRUTURA GRANDE PYTHON - espaço para textura customizada
+                    // Desenha bordas e fundo colorido
+                    ctx.fillStyle = "#2d5016"; // Verde escuro de cobra
+                    ctx.fillRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                    ctx.strokeStyle = "#1a3009";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                    
+                    // Texto indicativo (será sobrescrito pela textura)
+                    ctx.fillStyle = "#90EE90";
+                    ctx.font = "10px Arial";
+                    ctx.textAlign = "center";
+                    ctx.fillText("🐍", tx - cameraX + TILE_SIZE / 2, ty + TILE_SIZE / 2 + 3);
+                    ctx.textAlign = "left";
+                }
+                else if (tile === 21) {
+                    // BLOCO DE SUPORTE GRANDE - espaço para textura customizada
+                    // Desenha bloco grande para receber textura
+                    ctx.fillStyle = "#8B6914"; // Ouro/bronze
+                    ctx.fillRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                    ctx.strokeStyle = "#654321";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                    
+                    // Padrão de suporte
+                    ctx.fillStyle = "#654321";
+                    for (let i = 0; i < 3; i++) {
+                        ctx.fillRect(tx - cameraX + 2, ty + 5 + i * 10, TILE_SIZE - 4, 2);
+                    }
+                }
             }
         }
     }
@@ -409,6 +707,7 @@ function drawMap() {
 
 function update() {
     if (!gameActive) return;
+    if (gameWon) return; // Pausa se ganhou
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Sistema de Câmera
@@ -523,15 +822,19 @@ window.addEventListener('keyup', e => {
 function startGame() {
     const startScreen = document.getElementById('start-screen');
     const gameOverScreen = document.getElementById('game-over');
+    const winScreen = document.getElementById('win-screen');
     
     startScreen.classList.add('hidden');
     gameOverScreen.classList.add('hidden');
+    winScreen.classList.add('hidden');
 
+    generateMap(); // Gera o mapa proceduralmente
     player.reset();
     initEnemies();
     score = 0;
     cameraX = 0;
     gameActive = true;
+    gameWon = false; // Reset da flag de vitória
     
     if (animationId) cancelAnimationFrame(animationId);
     update(); 
@@ -540,6 +843,13 @@ function startGame() {
 function gameOver() {
     gameActive = false;
     document.getElementById('game-over').classList.remove('hidden');
+}
+
+function winGame() {
+    gameActive = false;
+    gameWon = true;
+    document.getElementById('final-score').textContent = `Pontuação Final: ${score}`;
+    document.getElementById('win-screen').classList.remove('hidden');
 }
 
 function restartGame() {
