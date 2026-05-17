@@ -32,6 +32,9 @@ brickTileBeatenImage.src = "img/brick_tile_beaten.png";
 // Imagem para obstáculo flutuante (mandacaru com textura)
 const obstacleImage = new Image();
 obstacleImage.src = "img/obstacle.png";
+// Imagem para cacto (novo)
+const cactusImage = new Image();
+cactusImage.src = "img/cactus.svg";
 // Imagem da bandeira
 const flagImage = new Image();
 flagImage.src = "img/flag.png";
@@ -42,15 +45,17 @@ pythonStructureImage.src = "img/python_structure.png";
 // --- CONFIGURAÇÕES GERAIS ---
 const TILE_SIZE = 40;
 const GRAVITY = 0.6;
-const JUMP_FORCE = -12;
+const JUMP_FORCE = -10;
+const JUMP_HOLD_FRAMES = 12;
 const SPEED = 2.5; // Reduzido de 5 para mais controle
 
 // --- ESTADO DO JOGO ---
 let gameActive = false;
-let gameWon = false; // Novo: controla se o player venceu
+let gameWon = false; // controla se o player venceu
 let score = 0;
 let animationId;
 let powerUps = []; // Array de power-ups ativos no mapa
+let cacti = []; // Array de cactos (objetos separados)
 
 // --- CÂMERA ---
 let cameraX = 0;
@@ -75,6 +80,8 @@ let map = [];
 function generateMap() {
     const mapWidth = 300;
     const mapHeight = 14;
+    cacti = [];
+    powerUps = [];
     map = [];
     
     // Inicializa com céu vazio
@@ -87,15 +94,18 @@ function generateMap() {
         map[10][col] = 1;
         map[11][col] = 1;
         
-        // Plataformas flutuantes simples e próximas
-        if (col > 20 && col < 45) {
-            if (col % 10 === 0) {
+        // Plataformas flutuantes simples e próximas para encher o cenário
+        if (col > 15 && col < 48) {
+            if (col % 9 === 0) {
                 map[7][col] = 2;
                 map[7][col + 1] = 2;
             }
             if (col % 10 === 3) {
                 map[8][col] = 2;
                 map[8][col + 1] = 2;
+            }
+            if (col % 7 === 2 && Math.random() < 0.45) {
+                map[6][col] = 5;
             }
         }
     }
@@ -137,9 +147,22 @@ function generateMap() {
             }
         }
         
-        // Mandacaru ocasional
-        if (col % 18 === 0 && Math.random() < 0.6) {
-            map[9][col] = 4;
+        // Mandacaru ocasional (ou cacto como objeto)
+        if (col % 18 === 0 && Math.random() < 0.64) {
+            if (Math.random() < 0.48) {
+                map[9][col] = 4;
+            } else {
+                createGroundCactus(col);
+            }
+        }
+        if (col % 11 === 5 && Math.random() < 0.45) {
+            map[8][col] = 2;
+        }
+        if (col % 13 === 2 && Math.random() < 0.34) {
+            map[7][col] = 5;
+        }
+        if (col % 9 === 4 && Math.random() < 0.33 && !map[6][col]) {
+            map[6][col] = 2;
         }
     }
     
@@ -178,38 +201,47 @@ function generateMap() {
             }
         }
         
-        // Mandacaru frequente
-        if (Math.random() < 0.15) {
-            map[9][col] = 4;
+        // Mandacaru frequente (ou cacto como objeto)
+        if (Math.random() < 0.18) {
+            if (Math.random() < 0.65) {
+                map[9][col] = 4;
+            } else {
+                createGroundCactus(col);
+            }
+        }
+        if (col % 7 === 0 && Math.random() < 0.42) {
+            map[6][col] = 2;
+        }
+        if (col % 10 === 4 && Math.random() < 0.38) {
+            map[8][col] = 5;
+        }
+        if (col % 8 === 2 && Math.random() < 0.28) {
+            map[7][col] = 2;
         }
     }
     
     // SEÇÃO FINAL (colunas 240-300): Preparação para objetivo
     for (let col = 240; col < 270; col++) {
-        // Chão ocasional
-        if (Math.random() < 0.45) {
+        // Chão ocasional mais preenchida e com blocos extras
+        if (Math.random() < 0.65) {
             map[10][col] = 1;
             map[11][col] = 1;
         }
         
-        // Muitas plataformas flutuantes MUITO PRÓXIMAS
-        if (col % 8 === 0 && Math.random() < 0.8) {
-            const groupSize = 3;
-            const startRow = 6 + Math.floor(Math.random() * 3);
-            
-            for (let i = 0; i < groupSize; i++) {
-                if (col + i < 270 && !map[startRow][col + i]) {
-                    map[startRow][col + i] = Math.random() < 0.3 ? 5 : 2;
-                    
-                    // Escadas bem definidas
-                    if (i > 0 && startRow > 6 && Math.random() < 0.7) {
-                        const intermediateRow = startRow + 1;
-                        if (!map[intermediateRow][col + i - 1]) {
-                            map[intermediateRow][col + i - 1] = 2;
-                        }
-                    }
-                }
-            }
+        if (col % 5 === 0 && Math.random() < 0.76) {
+            map[8][col] = Math.random() < 0.45 ? 5 : 2;
+        }
+        
+        if (col % 9 === 3 && Math.random() < 0.52) {
+            map[7][col] = 2;
+        }
+        
+        if (col % 11 === 6 && Math.random() < 0.35) {
+            map[9][col] = 4;
+        }
+        
+        if (col % 6 === 1 && Math.random() < 0.28) {
+            map[6][col] = 2;
         }
     }
     
@@ -222,10 +254,9 @@ function generateMap() {
     // Estrutura Final: Bandeira e Python
     const flagCol = 290;
     const flagRow = 9;
-    
+
     // Bandeira NO TOPO
     map[flagRow][flagCol] = 7;
-    
     // Chão abaixo
     map[flagRow + 1][flagCol] = 1;
     
@@ -249,6 +280,204 @@ function generateMap() {
             map[supportRow][flagCol + sx] = 21;
         }
     }
+
+    fixMapPassability(mapWidth);
+
+    // Adiciona alguns cactos garantidos em colunas de teste (facilita verificação)
+    const guaranteedCactusCols = [10, 25, 50, 70, 90, 170, 220];
+    for (const ccol of guaranteedCactusCols) {
+        if (ccol >= 0 && ccol < mapWidth) {
+            createGroundCactus(ccol);
+        }
+    }
+}
+
+function fixMapPassability(mapWidth) {
+    let holeCount = 0;
+    for (let col = 0; col < mapWidth; col++) {
+        const hasGround = map[10][col] || map[11][col];
+        if (!hasGround) {
+            holeCount++;
+        } else {
+            if (holeCount > 2) {
+                for (let fix = 1; fix <= holeCount; fix++) {
+                    const fixCol = col - fix;
+                    map[11][fixCol] = 1;
+                }
+            }
+            holeCount = 0;
+        }
+    }
+    if (holeCount > 2) {
+        for (let fix = 1; fix <= holeCount; fix++) {
+            const fixCol = mapWidth - fix;
+            map[11][fixCol] = 1;
+        }
+    }
+
+    for (let col = 0; col < mapWidth; col++) {
+        let solidCount = 0;
+        for (let row = 0; row < map.length; row++) {
+            if (map[row][col] !== 0 && map[row][col] !== 7) solidCount++;
+        }
+        if (solidCount >= 3) {
+            for (let row = 6; row <= 10; row++) {
+                if (map[row][col] !== 0) {
+                    map[row][col] = 0;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+function startLevel(level) {
+    generateMap();
+    initEnemies();
+    player.reset(true);
+    cameraX = 0;
+    gameWon = false;
+    if (animationId) cancelAnimationFrame(animationId);
+    gameActive = true;
+    update();
+}
+
+const cloudTemplates = [
+    { x: 130, y: 80, scale: 1.1 },
+    { x: 340, y: 60, scale: 0.9 },
+    { x: 620, y: 90, scale: 1.0 },
+    { x: 880, y: 70, scale: 0.8 }
+];
+
+function createGroundCactus(col) {
+    const groundRow = 10;
+    if (groundRow >= 0 && groundRow < map.length) {
+        map[groundRow][col] = 1;
+    }
+    if (groundRow + 1 >= 0 && groundRow + 1 < map.length) {
+        map[groundRow + 1][col] = 1;
+    }
+    cacti.push(new Cactus(col, groundRow));
+}
+
+function drawBackground() {
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, '#79c7ff');
+    gradient.addColorStop(0.3, '#bce6ff');
+    gradient.addColorStop(0.6, '#f3e3b1');
+    gradient.addColorStop(1, '#e4b476');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Sol no lado direito
+    ctx.save();
+    const sunX = canvas.width - 120;
+    const sunY = 90;
+    ctx.fillStyle = '#FFE066';
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, 50, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 224, 102, 0.25)';
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, 82, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Montanhas ao fundo
+    ctx.fillStyle = '#b7a070';
+    ctx.beginPath();
+    ctx.moveTo(0, 250);
+    ctx.lineTo(180, 170);
+    ctx.lineTo(320, 240);
+    ctx.lineTo(460, 165);
+    ctx.lineTo(620, 250);
+    ctx.lineTo(820, 210);
+    ctx.lineTo(820, 480);
+    ctx.lineTo(0, 480);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#c8b385';
+    ctx.beginPath();
+    ctx.moveTo(0, 280);
+    ctx.lineTo(140, 210);
+    ctx.lineTo(260, 280);
+    ctx.lineTo(420, 210);
+    ctx.lineTo(550, 300);
+    ctx.lineTo(740, 240);
+    ctx.lineTo(820, 260);
+    ctx.lineTo(820, 480);
+    ctx.lineTo(0, 480);
+    ctx.closePath();
+    ctx.fill();
+
+    // Dunas no horizonte
+    ctx.fillStyle = '#e6be7a';
+    ctx.beginPath();
+    ctx.moveTo(0, 330);
+    ctx.quadraticCurveTo(180, 310, 360, 340);
+    ctx.quadraticCurveTo(520, 360, 660, 330);
+    ctx.quadraticCurveTo(760, 310, 820, 340);
+    ctx.lineTo(820, 480);
+    ctx.lineTo(0, 480);
+    ctx.closePath();
+    ctx.fill();
+
+    // Dunas mais próximas
+    ctx.fillStyle = '#d8a45c';
+    ctx.beginPath();
+    ctx.moveTo(0, 390);
+    ctx.quadraticCurveTo(120, 360, 240, 395);
+    ctx.quadraticCurveTo(360, 430, 500, 400);
+    ctx.quadraticCurveTo(620, 375, 700, 405);
+    ctx.quadraticCurveTo(760, 430, 820, 405);
+    ctx.lineTo(820, 480);
+    ctx.lineTo(0, 480);
+    ctx.closePath();
+    ctx.fill();
+
+    // Rochas e arbustos decorativos
+    const decor = [
+        {x: 110, y: 400, w: 70, h: 45, color: '#8a6f55'},
+        {x: 280, y: 410, w: 55, h: 36, color: '#9d7e61'},
+        {x: 520, y: 395, w: 90, h: 50, color: '#8f7057'},
+        {x: 700, y: 415, w: 60, h: 34, color: '#95745b'}
+    ];
+    decor.forEach(item => {
+        ctx.fillStyle = item.color;
+        ctx.beginPath();
+        ctx.ellipse(item.x, item.y, item.w, item.h, -0.18, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // Pássaros no céu
+    const birds = [
+        {x: 140, y: 100},
+        {x: 220, y: 75},
+        {x: 320, y: 95},
+        {x: 470, y: 70}
+    ];
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = 2;
+    birds.forEach(b => {
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.quadraticCurveTo(b.x + 10, b.y - 8, b.x + 20, b.y);
+        ctx.quadraticCurveTo(b.x + 26, b.y - 5, b.x + 34, b.y);
+        ctx.stroke();
+    });
+
+    function drawCloud(cx, cy, scale) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.93)';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 20 * scale, 0, Math.PI * 2);
+        ctx.arc(cx + 28 * scale, cy - 6 * scale, 24 * scale, 0, Math.PI * 2);
+        ctx.arc(cx + 52 * scale, cy, 22 * scale, 0, Math.PI * 2);
+        ctx.arc(cx + 24 * scale, cy + 10 * scale, 18 * scale, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    cloudTemplates.forEach(cloud => drawCloud(cloud.x, cloud.y, cloud.scale));
 }
 
 // --- CLASSES ---
@@ -258,7 +487,7 @@ class Player {
         this.reset();
     }
 
-    reset() {
+    reset(keepLives = false) {
         this.x = 100;
         this.y = 200;
         this.width = 32;
@@ -269,9 +498,15 @@ class Player {
         this.isBig = false;
         this.color = "#4CAF50";
         this.facing = 1; // 1 = direita, -1 = esquerda
-        this.lives = 1; // Começa com 1 vida
+        if (!keepLives) {
+            this.lives = 1; // Começa com 1 vida
+        }
         this.hasPowerUp = false; // Flag se tem power-up ativo
         this.invulnerableTimer = 0;
+        this.jumpHoldTimer = 0;
+        this.walkTimer = 0;
+        this.bobOffset = 0;
+        this.distanceTraveled = 0; // acumula distância para pontuação por caminhada
     }
 
     update() {
@@ -295,10 +530,38 @@ class Player {
         if (keys.up && this.onGround) {
             this.vy = JUMP_FORCE;
             this.onGround = false;
+            this.jumpHoldTimer = JUMP_HOLD_FRAMES;
         }
 
-        this.vy += GRAVITY;
+        if (this.vy < 0) {
+            if (keys.up && this.jumpHoldTimer > 0) {
+                this.jumpHoldTimer--;
+                this.vy += GRAVITY * 0.28; // mantém impulso por mais tempo
+            } else {
+                this.vy += GRAVITY * 1.6; // gravidade maior ao soltar o botão
+            }
+        } else {
+            this.vy += GRAVITY;
+        }
         this.x += this.vx;
+        if (this.vx > 0) {
+            this.distanceTraveled += this.vx;
+            if (this.distanceTraveled >= 24) {
+                const points = Math.floor(this.distanceTraveled / 24);
+                score += points;
+                this.distanceTraveled -= points * 24;
+            }
+        }
+
+        // Animação de caminhada/bob
+        if (this.onGround && this.vx !== 0) {
+            this.walkTimer += 0.24;
+            this.bobOffset = Math.sin(this.walkTimer * Math.PI) * 3;
+        } else {
+            this.walkTimer = 0;
+            this.bobOffset = this.onGround ? 0 : Math.sin(Date.now() / 140) * 2;
+        }
+
         this.y += this.vy;
 
         if (this.x < 0) this.x = 0; // Limite esquerdo
@@ -324,45 +587,48 @@ class Player {
                         this.y < ty + TILE_SIZE && this.y + this.height > ty) {
                         
                         // BANDEIRA - detecta vitória sem bloquear movimento
-                        if (tile === 7) {
-                            score += 1000; // Bônus final
+                                            if (tile === 7) {
+                            score += 500; // Bônus final
                             winGame();
                             return; // Sai da função
                         }
+
+                        const overlapX = Math.min(this.x + this.width, tx + TILE_SIZE) - Math.max(this.x, tx);
+                        const overlapY = Math.min(this.y + this.height, ty + TILE_SIZE) - Math.max(this.y, ty);
+
+                        if (overlapX <= 0 || overlapY <= 0) continue;
                         
-                        // Bater a cabeça (Baixo para cima) - APENAS se o personagem está abaixo e bate para cima
-                        // Personagem tem height ~55, TILE_SIZE é 40, então condição rigorosa: deve estar bem abaixo
-                        if (this.vy < 0 && this.y + this.height > ty + TILE_SIZE * 0.8) {
-                            this.vy = 0;
-                            this.y = ty + TILE_SIZE;
-                            
-                            // Bloco de tijolos
-                            if (tile === 2) { 
-                                score += 100;
-                                map[row][col] = 3; 
-                                // NÃO crescer aqui! Crescimento só ocorre ao coletar power-up
-                            }
-                            // Bloco da sorte
-                            else if (tile === 5) {
-                                score += 150;
-                                map[row][col] = 6; // Marca como batido
-                                
-                                // 50% de chance de gerar power-up - aumentado de 35%
-                                if (Math.random() < 0.50) {
+                        // Resolva por menor overlap para evitar ficar preso entre dois blocos
+                        if (overlapY < overlapX) {
+                            // Colisão vertical
+                            if (this.y + this.height / 2 <= ty + TILE_SIZE / 2 && this.vy > 0) {
+                                // Cair no chão
+                                this.vy = 0;
+                                this.y = ty - this.height;
+                                this.onGround = true;
+                            } else if (this.vy < 0) {
+                                // Bater a cabeça
+                                this.vy = 0;
+                                this.y = ty + TILE_SIZE;
+                                if (tile === 2) {
+                                    score += 50;
+                                    map[row][col] = 3;
+                                }
+                                else if (tile === 5) {
+                                    score += 80;
+                                    map[row][col] = 6;
                                     powerUps.push(new PowerUp(tx, ty));
                                 }
                             }
-                        } 
-                        // Cair no chão (Cima para baixo)
-                        else if (this.vy > 0 && this.y + this.height < ty + TILE_SIZE / 2 + 10) {
-                            this.vy = 0;
-                            this.y = ty - this.height;
-                            this.onGround = true;
-                        }
-                        // Empurrão lateral - NÃO bloqueia bandeira (7) nem estrutura Python (9)
-                        else if (tile !== 7 && tile !== 9) {
-                            if (this.vx > 0) this.x = tx - this.width;
-                            if (this.vx < 0) this.x = tx + TILE_SIZE;
+                        } else {
+                            // Colisão horizontal
+                            if (tile !== 7 && tile !== 9) {
+                                if (this.x + this.width / 2 <= tx + TILE_SIZE / 2) {
+                                    this.x = tx - this.width;
+                                } else {
+                                    this.x = tx + TILE_SIZE;
+                                }
+                            }
                         }
                     }
                 }
@@ -378,47 +644,75 @@ class Player {
 
         let drawHeight = this.isBig ? this.height * 1.3 : this.height;
         let drawY = this.isBig ? this.y - (this.height * 0.3) : this.y;
+        drawY += this.bobOffset;
+
+        let scaleX = 1;
+        let scaleY = 1;
+        if (!this.onGround) {
+            if (this.vy < 0) {
+                // Estica durante a subida
+                scaleX = 0.92;
+                scaleY = 1.12;
+            } else {
+                // Apertar ao cair
+                scaleX = 1.04;
+                scaleY = 0.96;
+            }
+        } else {
+            const walkScale = 1 + Math.abs(Math.sin(this.walkTimer * Math.PI)) * 0.04;
+            scaleX = walkScale;
+            scaleY = walkScale;
+        }
 
         if (playerImage.complete && playerImage.naturalWidth !== 0) {
             ctx.save();
-            if (this.facing < 0) {
-                ctx.translate(this.x - cameraX + this.width, drawY);
-                ctx.scale(-1, 1);
-                ctx.drawImage(playerImage, 0, 0, this.width, drawHeight);
-            } else {
-                ctx.drawImage(playerImage, this.x - cameraX, drawY, this.width, drawHeight);
-            }
+            const posX = this.x - cameraX + this.width / 2;
+            const posY = drawY + drawHeight / 2;
+            ctx.translate(posX, posY);
+            ctx.scale(this.facing * scaleX, scaleY);
+            ctx.drawImage(playerImage, -this.width / 2, -drawHeight / 2, this.width, drawHeight);
             ctx.restore();
         } else {
+            ctx.save();
+            const posX = this.x - cameraX + this.width / 2;
+            const posY = drawY + drawHeight / 2;
+            ctx.translate(posX, posY);
+            ctx.scale(this.facing * scaleX, scaleY);
             ctx.fillStyle = this.color;
-            ctx.fillRect(this.x - cameraX, drawY, this.width, drawHeight);
+            ctx.fillRect(-this.width / 2, -drawHeight / 2, this.width, drawHeight);
+            ctx.restore();
         }
     }
 }
 
 class Enemy {
-    constructor(x, y) {
+    constructor(x, y, speed = -1) {
         this.x = x;
         this.y = y;
         this.width = 35;
         this.height = 30;
-        this.vx = -1; // Reduzido de -2 para mais lentidão
+        this.vx = speed;
         this.color = "#8D6E63";
-        this.facing = -1; // -1 = esquerda (inicial), 1 = direita
+        this.facing = this.vx < 0 ? -1 : 1;
+        this.walkTimer = 0;
+        this.bobOffset = 0;
     }
 
     update() {
         this.x += this.vx;
+
+        this.walkTimer += 0.12;
+        this.bobOffset = Math.sin(this.walkTimer * Math.PI) * 3;
         
         // Verifica colisão com blocos
         this.checkBlockCollisions();
         
         // Inverte direção se sair muito do mapa
         if (this.x < 0) {
-            this.vx = 1;
+            this.vx = Math.abs(this.vx);
             this.facing = 1;
         } else if (this.x > map[0].length * TILE_SIZE - this.width) {
-            this.vx = -1;
+            this.vx = -Math.abs(this.vx);
             this.facing = -1;
         }
     }
@@ -452,19 +746,26 @@ class Enemy {
     }
 
     draw() {
+        const drawY = this.y + this.bobOffset;
+        const scaleAnim = 1 + Math.abs(Math.sin(this.walkTimer * Math.PI)) * 0.05;
+
         if (enemyImage.complete && enemyImage.naturalWidth !== 0) {
             ctx.save();
-            if (this.facing < 0) {
-                ctx.translate(this.x - cameraX + this.width, this.y);
-                ctx.scale(-1, 1);
-                ctx.drawImage(enemyImage, 0, 0, this.width, this.height);
-            } else {
-                ctx.drawImage(enemyImage, this.x - cameraX, this.y, this.width, this.height);
-            }
+            const posX = this.x - cameraX + this.width / 2;
+            const posY = drawY + this.height / 2;
+            ctx.translate(posX, posY);
+            ctx.scale(this.facing * scaleAnim, scaleAnim);
+            ctx.drawImage(enemyImage, -this.width / 2, -this.height / 2, this.width, this.height);
             ctx.restore();
         } else {
+            ctx.save();
+            const posX = this.x - cameraX + this.width / 2;
+            const posY = drawY + this.height / 2;
+            ctx.translate(posX, posY);
+            ctx.scale(this.facing * scaleAnim, scaleAnim);
             ctx.fillStyle = this.color;
-            ctx.fillRect(this.x - cameraX, this.y, this.width, this.height);
+            ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+            ctx.restore();
         }
     }
 }
@@ -535,18 +836,120 @@ class PowerUp {
     }
 }
 
+class Cactus {
+    constructor(col, row) {
+        this.col = col;
+        this.row = row;
+        this.width = TILE_SIZE * 0.8;
+        this.height = TILE_SIZE * 2.2;
+        this.x = col * TILE_SIZE;
+        this.y = row * TILE_SIZE - (this.height - TILE_SIZE);
+        this.drawX = this.x + (TILE_SIZE - this.width) / 2;
+        this.drawY = this.y;
+        this.color = "#2E8B57";
+        this.vx = 0;
+        this.speed = 0.8; // velocidade do cacto andando
+    }
+
+    draw() {
+        if (cactusImage.complete && cactusImage.naturalWidth !== 0) {
+            ctx.drawImage(cactusImage, this.drawX - cameraX, this.drawY, this.width, this.height);
+        } else {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.drawX - cameraX + this.width * 0.15, this.drawY + this.height * 0.18, this.width * 0.7, this.height * 0.64);
+            ctx.fillRect(this.drawX - cameraX - this.width * 0.12, this.drawY + this.height * 0.34, this.width * 0.28, this.height * 0.14);
+            ctx.fillRect(this.drawX - cameraX + this.width * 0.84, this.drawY + this.height * 0.38, this.width * 0.28, this.height * 0.14);
+            ctx.fillStyle = "#14502F";
+            for (let i = 0; i < 5; i++) {
+                const sx = this.drawX - cameraX + this.width * 0.2 + i * (this.width * 0.12);
+                const sy = this.drawY + this.height * (0.25 + (i % 2) * 0.12);
+                ctx.fillRect(sx, sy, Math.max(2, Math.floor(this.width * 0.06)), Math.max(4, Math.floor(this.height * 0.06)));
+            }
+            ctx.fillStyle = "rgba(0,0,0,0.12)";
+            ctx.beginPath();
+            ctx.ellipse(this.drawX - cameraX + this.width / 2, this.drawY + this.height * 0.95, this.width * 0.6, TILE_SIZE * 0.18, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    checkCollision(player) {
+        return player.x < this.drawX + this.width &&
+               player.x + player.width > this.drawX &&
+               player.y < this.drawY + this.height &&
+               player.y + player.height > this.drawY;
+    }
+
+    shouldDamage(player) {
+        const playerBottom = player.y + player.height;
+        const cactusTop = this.drawY;
+        const overlapX = Math.min(player.x + player.width, this.drawX + this.width) - Math.max(player.x, this.drawX);
+        const overlapY = Math.min(playerBottom, this.drawY + this.height) - Math.max(player.y, this.drawY);
+
+        // Menor área de dano: exige contato significativo e não apenas passar perto do topo
+        const isAboveSafe = playerBottom <= cactusTop + 18;
+        const hasHorizontalContact = overlapX > Math.min(this.width, player.width) * 0.35;
+        const hasVerticalContact = overlapY > 12;
+
+        return !isAboveSafe && hasHorizontalContact && hasVerticalContact;
+    }
+
+    onHit(player) {
+        if (!this.shouldDamage(player)) return;
+        if (player.invulnerableTimer > 0) return;
+
+        if (player.hasPowerUp) {
+            player.hasPowerUp = false;
+            player.isBig = false;
+            player.invulnerableTimer = 60;
+            player.vy = -5;
+        } else {
+            player.lives--;
+            if (player.lives <= 0) {
+                gameOver();
+                return;
+            } else {
+                player.x = 100;
+                player.y = 200;
+                player.vx = 0;
+                player.vy = 0;
+                player.onGround = false;
+                player.isBig = false;
+                player.invulnerableTimer = 60;
+            }
+        }
+
+        // Empurra o jogador para fora do cacto
+        if (player.x + player.width / 2 < this.drawX + this.width / 2) {
+            player.x = this.drawX - player.width;
+        } else {
+            player.x = this.drawX + this.width;
+        }
+    }
+
+    update(player) {
+        // Cacto estático: não se move, apenas mantém sua posição de desenho.
+        this.drawX = this.x + (TILE_SIZE - this.width) / 2;
+        this.drawY = this.y;
+    }
+}
+
 // --- INSTÂNCIAS ---
 const player = new Player();
 let enemies = [];
 
 function initEnemies() {
-    enemies = [
-        new Enemy(600, 370), 
-        new Enemy(1800, 370), 
-        new Enemy(3200, 370),
-        new Enemy(4500, 370)
-    ];
+    enemies = [];
     powerUps = []; // Reseta power-ups ao iniciar
+    const enemyY = 370;
+    const baseX = 600;
+    const spacing = 700;
+    const enemyCount = 4;
+
+    for (let i = 0; i < enemyCount; i++) {
+        const speed = -1.2 - Math.random() * 0.4;
+        const x = baseX + i * spacing + (Math.random() * 250 - 125);
+        enemies.push(new Enemy(x, enemyY, speed));
+    }
 }
 
 // --- LÓGICA PRINCIPAL ---
@@ -621,6 +1024,7 @@ function drawMap() {
                         }
                     }
                 }
+                
                 else if (tile === 5) {
                     // Bloco da Sorte (intacto) - sempre tenta usar textura
                     if (luckBlockImage.complete && luckBlockImage.naturalWidth !== 0) {
@@ -710,6 +1114,8 @@ function update() {
     if (gameWon) return; // Pausa se ganhou
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    drawBackground();
+
     // Sistema de Câmera
     if (player.x > canvas.width / 2) {
         cameraX = player.x - canvas.width / 2;
@@ -718,6 +1124,15 @@ function update() {
     drawMap();
     player.update();
     player.draw();
+
+    // Atualizar, desenhar cactos e checar colisão somente com o player
+    for (let i = cacti.length - 1; i >= 0; i--) {
+        cacti[i].update(player);
+        cacti[i].draw();
+        if (cacti[i].checkCollision(player)) {
+            cacti[i].onHit(player);
+        }
+    }
 
     // Atualizar e desenhar power-ups
     for (let i = powerUps.length - 1; i >= 0; i--) {
@@ -734,7 +1149,7 @@ function update() {
             if (!player.hasPowerUp) {
                 player.hasPowerUp = true;
                 player.isBig = true; // Crescer quando coleta power-up
-                score += 500; // Bônus por pegar power-up
+                score += 300; // Bônus por pegar power-up
             }
             powerUps.splice(i, 1);
         }
@@ -752,7 +1167,7 @@ function update() {
             if (player.vy > 0 && player.y < enemy.y) {
                 enemies.splice(index, 1);
                 player.vy = JUMP_FORCE / 1.5;
-                score += 200;
+                score += 150;
             } 
             // NOVO: Só toma dano se NÃO estiver invencível
             else if (player.invulnerableTimer <= 0) { 
@@ -785,37 +1200,43 @@ function update() {
         }
     });
 
-    // Interface (Score e Vidas)
+    // Fundo do HUD para garantir legibilidade
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.fillRect(10, 10, 340, 130);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(10, 10, 340, 130);
+
     ctx.fillStyle = "white";
     ctx.font = "bold 22px Arial";
-    ctx.fillText(`JUQUINHA PONTOS: ${score}`, 20, 40);
-    
-    // Mostrar vidas
-    ctx.fillStyle = "white";
-    ctx.font = "bold 20px Arial";
-    ctx.fillText(`VIDAS: ${player.lives}`, 20, 70);
-    
-    // Mostrar se tem power-up ativo
+    ctx.fillText(`PONTOS: ${score}`, 22, 38);
+    ctx.fillText(`VIDAS: ${player.lives}`, 22, 70);
+    ctx.fillText(`OBJETIVO: PEGUE A BANDEIRA`, 22, 102);
+
     if (player.hasPowerUp) {
         ctx.fillStyle = "#FFD700";
         ctx.font = "bold 18px Arial";
-        ctx.fillText("⭐ PROTEGIDO", canvas.width - 200, 40);
+        ctx.fillText("⭐ PROTEGIDO", canvas.width - 230, 40);
     }
+
+    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    ctx.font = "16px Arial";
+    ctx.fillText("CONTROLES: A/D = mover, W = pular", 20, canvas.height - 20);
 
     animationId = requestAnimationFrame(update);
 }
 
 // --- CONTROLES ---
 window.addEventListener('keydown', e => {
-    if (e.key === 'ArrowRight') keys.right = true;
-    if (e.key === 'ArrowLeft') keys.left = true;
-    if (e.key === 'ArrowUp' || e.key === ' ') keys.up = true;
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') keys.up = true;
 });
 
 window.addEventListener('keyup', e => {
-    if (e.key === 'ArrowRight') keys.right = false;
-    if (e.key === 'ArrowLeft') keys.left = false;
-    if (e.key === 'ArrowUp' || e.key === ' ') keys.up = false;
+    if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+    if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') keys.up = false;
 });
 
 // --- SISTEMA DE TELAS ---
@@ -828,10 +1249,10 @@ function startGame() {
     gameOverScreen.classList.add('hidden');
     winScreen.classList.add('hidden');
 
-    generateMap(); // Gera o mapa proceduralmente
-    player.reset();
-    initEnemies();
     score = 0;
+    player.reset(false);
+    generateMap(); // Gera o mapa proceduralmente
+    initEnemies();
     cameraX = 0;
     gameActive = true;
     gameWon = false; // Reset da flag de vitória

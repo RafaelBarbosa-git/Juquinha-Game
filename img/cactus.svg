@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="256" viewBox="0 0 128 256" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <linearGradient id="g" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#42A96E"/>
+      <stop offset="100%" stop-color="#2E8B57"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="256" rx="16" fill="transparent"/>
+  <!-- Corpo -->
+  <g transform="translate(32,20)">
+    <rect x="24" y="40" rx="18" ry="18" width="40" height="120" fill="url(#g)" stroke="#1f6947" stroke-width="4"/>
+    <!-- Braço esquerdo -->
+    <rect x="6" y="70" rx="12" ry="12" width="20" height="14" transform="rotate(-12 16 77)" fill="url(#g)" stroke="#1f6947" stroke-width="3"/>
+    <rect x="6" y="50" rx="10" ry="10" width="14" height="40" transform="rotate(-6 13 70)" fill="url(#g)" stroke="#1f6947" stroke-width="2"/>
+    <!-- Braço direito -->
+    <rect x="98" y="88" rx="12" ry="12" width="20" height="14" transform="rotate(12 108 95)" fill="url(#g)" stroke="#1f6947" stroke-width="3"/>
+    <rect x="94" y="62" rx="10" ry="10" width="14" height="40" transform="rotate(6 101 82)" fill="url(#g)" stroke="#1f6947" stroke-width="2"/>
+    <!-- Topo arredondado -->
+    <ellipse cx="44" cy="44" rx="20" ry="22" fill="url(#g)" stroke="#1f6947" stroke-width="4"/>
+    <!-- Espinhos simples -->
+    <g fill="#144B2F">
+      <rect x="44" y="60" width="3" height="8" transform="rotate(-20 45 64)"/>
+      <rect x="60" y="72" width="3" height="8" transform="rotate(10 61 76)"/>
+      <rect x="36" y="88" width="3" height="8" transform="rotate(-10 37 92)"/>
+      <rect x="70" y="104" width="3" height="8" transform="rotate(25 71 108)"/>
+      <rect x="52" y="120" width="3" height="8" transform="rotate(-15 53 124)"/>
+    </g>
+    <!-- Sombra na base -->
+    <ellipse cx="44" cy="168" rx="36" ry="10" fill="rgba(0,0,0,0.12)"/>
+  </g>
+</svg>
