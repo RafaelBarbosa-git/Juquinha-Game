@@ -1059,7 +1059,7 @@ class ZooBuilding {
 
     drawZoo() {
         const baseX = this.x - cameraX;
-        const baseY = this.y;
+        const baseY = this.y - TILE_SIZE * 3;
 
         // Estrutura principal - paredes de madeira
         ctx.fillStyle = "#8B4513";
@@ -1141,7 +1141,7 @@ class ZooBuilding {
 
     drawBase() {
         const baseX = this.x - cameraX;
-        const baseY = this.y;
+        const baseY = this.y - TILE_SIZE * 3;
 
         // Base/Suporte em pedra
         ctx.fillStyle = "#696969";
