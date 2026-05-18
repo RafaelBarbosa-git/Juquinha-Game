@@ -59,6 +59,9 @@ let score = 0;
 let animationId;
 let powerUps = []; // Array de power-ups ativos no mapa
 let cacti = []; // Array de cactos (objetos separados)
+let confetti = []; // Array de partículas confete para celebração
+let flagAnimationTime = 0; // Tempo para animação da bandeira
+let zooBuildingAnimation = 0; // Tempo para animação do zoológico
 
 // --- CÂMERA ---
 let cameraX = 0;
@@ -76,6 +79,8 @@ const keys = { right: false, left: false, up: false };
 // 6: Bloco Sorte (batido)
 // 7: Bandeira (vitória)
 // 8+: Estruturas grandes (suporte e Python)
+// 20: Estrutura Zoológico (Python)
+// 21: Base Zoológico
 
 // --- MAPA GERADO PROCEDURALMENTE ---
 let map = [];
@@ -300,6 +305,9 @@ function generateMap() {
             createGroundCactus(ccol);
         }
     }
+    
+    // Cria instância do zoológico para renderização coordenada
+    zoo = new ZooBuilding(pythonCol, flagRow + 1);
 }
 
 function fixMapPassability(mapWidth) {
@@ -970,9 +978,166 @@ class Cactus {
     }
 }
 
+// Classe para Partículas de Confete - celebração de vitória
+class Confetti {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 8;
+        this.vy = Math.random() * (-6) - 3;
+        this.rotation = Math.random() * Math.PI * 2;
+        this.rotationSpeed = (Math.random() - 0.5) * 0.3;
+        this.width = Math.random() * 12 + 8;
+        this.height = Math.random() * 8 + 4;
+        this.color = ["#FF6B6B", "#4ECDC4", "#FFE66D", "#95E1D3", "#F38181", "#AA96DA", "#FCBAD3"][Math.floor(Math.random() * 7)];
+        this.life = 120; // Frames até desaparecer
+        this.maxLife = 120;
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += 0.15; // Gravidade
+        this.rotation += this.rotationSpeed;
+        this.life--;
+        this.vx *= 0.98; // Resistência do ar
+    }
+
+    draw() {
+        const alpha = this.life / this.maxLife;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.translate(this.x - cameraX, this.y);
+        ctx.rotate(this.rotation);
+        ctx.fillStyle = this.color;
+        ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+        ctx.restore();
+    }
+
+    isAlive() {
+        return this.life > 0;
+    }
+}
+
+// Classe para estrutura do Zoológico - visual melhorado
+class ZooBuilding {
+    constructor(col, row) {
+        this.col = col;
+        this.row = row;
+        this.x = col * TILE_SIZE;
+        this.y = row * TILE_SIZE;
+        this.animationTime = 0;
+        this.roofHeight = 8;
+    }
+
+    drawZoo() {
+        const baseX = this.x - cameraX;
+        const baseY = this.y;
+
+        // Estrutura principal - paredes de madeira
+        ctx.fillStyle = "#8B4513";
+        ctx.fillRect(baseX, baseY, TILE_SIZE * 4, TILE_SIZE * 3);
+        
+        // Parede destacada
+        ctx.fillStyle = "#A0522D";
+        ctx.fillRect(baseX, baseY, TILE_SIZE * 4, TILE_SIZE * 2.5);
+        
+        // Decoração em madeira - ripas verticais
+        ctx.strokeStyle = "#654321";
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.moveTo(baseX + i * TILE_SIZE, baseY);
+            ctx.lineTo(baseX + i * TILE_SIZE, baseY + TILE_SIZE * 2.5);
+            ctx.stroke();
+        }
+
+        // Telhado - estrutura triangular
+        ctx.fillStyle = "#D2691E";
+        ctx.beginPath();
+        ctx.moveTo(baseX, baseY);
+        ctx.lineTo(baseX + TILE_SIZE * 2, baseY - TILE_SIZE * 0.8);
+        ctx.lineTo(baseX + TILE_SIZE * 4, baseY);
+        ctx.fill();
+
+        // Telhas no telhado
+        ctx.strokeStyle = "#8B4513";
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 5; i++) {
+            ctx.beginPath();
+            ctx.moveTo(baseX + i * TILE_SIZE * 0.8, baseY - TILE_SIZE * 0.8 + i * 8);
+            ctx.lineTo(baseX + TILE_SIZE * 4, baseY + (i * 8));
+            ctx.stroke();
+        }
+
+        // Janelas do zoológico
+        const windowColor = "#87CEEB";
+        for (let w = 0; w < 3; w++) {
+            const winX = baseX + TILE_SIZE * 0.5 + w * TILE_SIZE * 1.2;
+            const winY = baseY + TILE_SIZE * 0.8;
+            // Moldura
+            ctx.fillStyle = "#654321";
+            ctx.fillRect(winX, winY, TILE_SIZE * 0.7, TILE_SIZE * 0.7);
+            // Vidro
+            ctx.fillStyle = windowColor;
+            ctx.fillRect(winX + 2, winY + 2, TILE_SIZE * 0.7 - 4, TILE_SIZE * 0.7 - 4);
+            // Reflexo
+            ctx.fillStyle = "rgba(255,255,255,0.3)";
+            ctx.fillRect(winX + 4, winY + 4, TILE_SIZE * 0.3, TILE_SIZE * 0.3);
+        }
+
+        // Porta do zoológico
+        ctx.fillStyle = "#654321";
+        ctx.fillRect(baseX + TILE_SIZE * 1.6, baseY + TILE_SIZE * 1.5, TILE_SIZE * 0.8, TILE_SIZE);
+        ctx.fillStyle = "#DAA520";
+        ctx.fillRect(baseX + TILE_SIZE * 1.7, baseY + TILE_SIZE * 1.6, TILE_SIZE * 0.6, TILE_SIZE * 0.8);
+        // Maçaneta
+        ctx.fillStyle = "#FFD700";
+        ctx.beginPath();
+        ctx.arc(baseX + TILE_SIZE * 2.2, baseY + TILE_SIZE * 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Placa do zoológico no topo
+        ctx.fillStyle = "#DAA520";
+        ctx.fillRect(baseX + TILE_SIZE * 1, baseY - TILE_SIZE * 0.5, TILE_SIZE * 2, TILE_SIZE * 0.35);
+        ctx.strokeStyle = "#8B4513";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(baseX + TILE_SIZE * 1, baseY - TILE_SIZE * 0.5, TILE_SIZE * 2, TILE_SIZE * 0.35);
+        
+        // Texto na placa
+        ctx.fillStyle = "#8B4513";
+        ctx.font = "bold 12px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("ZOO", baseX + TILE_SIZE * 2, baseY - TILE_SIZE * 0.22);
+        ctx.textAlign = "left";
+    }
+
+    drawBase() {
+        const baseX = this.x - cameraX;
+        const baseY = this.y;
+
+        // Base/Suporte em pedra
+        ctx.fillStyle = "#696969";
+        ctx.fillRect(baseX - TILE_SIZE, baseY + TILE_SIZE * 2.5, TILE_SIZE * 6, TILE_SIZE * 0.8);
+        
+        // Padrão de pedras
+        ctx.fillStyle = "#808080";
+        for (let i = 0; i < 6; i++) {
+            ctx.fillRect(baseX - TILE_SIZE + i * TILE_SIZE, baseY + TILE_SIZE * 2.5, TILE_SIZE * 0.9, TILE_SIZE * 0.8);
+        }
+
+        // Sombra realista
+        ctx.fillStyle = "rgba(0,0,0,0.15)";
+        ctx.beginPath();
+        ctx.ellipse(baseX + TILE_SIZE * 1.5, baseY + TILE_SIZE * 3.5, TILE_SIZE * 3, TILE_SIZE * 0.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
 // --- INSTÂNCIAS ---
 const player = new Player();
 let enemies = [];
+let zoo = null; // Instância do zoológico para renderização coordenada
 
 function initEnemies() {
     enemies = [];
@@ -1094,55 +1259,79 @@ function drawMap() {
                     }
                 }
                 else if (tile === 7) {
-                    // Bandeira (objetivo final) - desenha mastro e bandeira ACIMA do bloco
+                    // Bandeira (objetivo final) - com animação flutuante
+                    const sway = Math.sin(Date.now() / 150 + tx) * 3;
+                    const bobbing = Math.cos(Date.now() / 300 + tx) * 2;
+                    
                     if (flagImage.complete && flagImage.naturalWidth !== 0) {
-                        ctx.drawImage(flagImage, tx - cameraX, ty - TILE_SIZE * 2.5, TILE_SIZE, TILE_SIZE * 3);
+                        ctx.drawImage(flagImage, tx - cameraX + sway, ty - TILE_SIZE * 2.5 + bobbing, TILE_SIZE, TILE_SIZE * 3);
                     } else {
-                        // Fallback: desenha bandeira com cores
-                        // Mastro
-                        ctx.fillStyle = "#8B7355";
-                        ctx.fillRect(tx - cameraX + TILE_SIZE / 2 - 3, ty - TILE_SIZE * 2, 6, TILE_SIZE * 2);
-                        // Bandeira vermelha
-                        ctx.fillStyle = "#FF0000";
-                        ctx.fillRect(tx - cameraX + TILE_SIZE / 2 + 3, ty - TILE_SIZE * 2 + 5, 15, 10);
-                        ctx.strokeStyle = "#CC0000";
+                        // Mastro da bandeira com brilho
+                        ctx.fillStyle = "#654321";
+                        ctx.fillRect(tx - cameraX + TILE_SIZE / 2 - 4, ty - TILE_SIZE * 2.2, 8, TILE_SIZE * 2.2);
+                        
+                        // Sombra do mastro
+                        ctx.fillStyle = "rgba(0,0,0,0.2)";
+                        ctx.fillRect(tx - cameraX + TILE_SIZE / 2 - 2, ty - TILE_SIZE * 2.2, 3, TILE_SIZE * 2.2);
+                        
+                        // Bandeira vermelha flutuando
+                        ctx.save();
+                        ctx.translate(tx - cameraX + TILE_SIZE / 2 + sway, ty - TILE_SIZE * 1.8 + bobbing);
+                        
+                        // Efeito ondulante
+                        const waveAmount = Math.sin(Date.now() / 200) * 2;
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(20 + waveAmount, -5);
+                        ctx.lineTo(20 + waveAmount * 0.5, 8);
+                        ctx.lineTo(0, 8);
+                        ctx.closePath();
+                        
+                        // Gradiente para bandeira
+                        const gradient = ctx.createLinearGradient(0, -5, 20, 8);
+                        gradient.addColorStop(0, "#FF4444");
+                        gradient.addColorStop(1, "#CC0000");
+                        ctx.fillStyle = gradient;
+                        ctx.fill();
+                        
+                        // Borda da bandeira
+                        ctx.strokeStyle = "#990000";
                         ctx.lineWidth = 2;
-                        ctx.strokeRect(tx - cameraX + TILE_SIZE / 2 + 3, ty - TILE_SIZE * 2 + 5, 15, 10);
+                        ctx.stroke();
+                        
+                        ctx.restore();
                     }
                 }
                 else if (tile === 20) {
-                    // ESTRUTURA GRANDE PYTHON - espaço para textura customizada
-                    // Desenha bordas e fundo colorido
-                    ctx.fillStyle = "#2d5016"; // Verde escuro de cobra
-                    ctx.fillRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
-                    ctx.strokeStyle = "#1a3009";
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
-                    
-                    // Texto indicativo (será sobrescrito pela textura)
-                    ctx.fillStyle = "#90EE90";
-                    ctx.font = "10px Arial";
-                    ctx.textAlign = "center";
-                    ctx.fillText("🐍", tx - cameraX + TILE_SIZE / 2, ty + TILE_SIZE / 2 + 3);
-                    ctx.textAlign = "left";
+                    // ESTRUTURA ZOO - renderizada como um todo pelo objeto zoo
+                    // Fallback: bloco de suporte simples se zoo não existir
+                    if (!zoo) {
+                        ctx.fillStyle = "#2d5016";
+                        ctx.fillRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                        ctx.strokeStyle = "#1a3009";
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                    }
                 }
                 else if (tile === 21) {
-                    // BLOCO DE SUPORTE GRANDE - espaço para textura customizada
-                    // Desenha bloco grande para receber textura
-                    ctx.fillStyle = "#8B6914"; // Ouro/bronze
-                    ctx.fillRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
-                    ctx.strokeStyle = "#654321";
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
-                    
-                    // Padrão de suporte
-                    ctx.fillStyle = "#654321";
-                    for (let i = 0; i < 3; i++) {
-                        ctx.fillRect(tx - cameraX + 2, ty + 5 + i * 10, TILE_SIZE - 4, 2);
+                    // BASE ZOO - renderizada como um todo pelo objeto zoo
+                    // Fallback: bloco de base simples se zoo não existir
+                    if (!zoo) {
+                        ctx.fillStyle = "#8B6914";
+                        ctx.fillRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
+                        ctx.strokeStyle = "#654321";
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(tx - cameraX, ty, TILE_SIZE, TILE_SIZE);
                     }
                 }
             }
         }
+    }
+    
+    // Renderizar zoológico se existir
+    if (zoo) {
+        zoo.drawZoo();
+        zoo.drawBase();
     }
 }
 
@@ -1204,6 +1393,17 @@ function update() {
                 }
             }
             powerUps.splice(i, 1);
+        }
+    }
+    
+    // Atualizar e desenhar confete (celebração de vitória)
+    for (let i = confetti.length - 1; i >= 0; i--) {
+        confetti[i].update();
+        confetti[i].draw();
+        
+        // Remover confete morto
+        if (!confetti[i].isAlive()) {
+            confetti.splice(i, 1);
         }
     }
 
@@ -1291,6 +1491,15 @@ window.addEventListener('keydown', e => {
     if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
     if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
     if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') keys.up = true;
+    
+    // Atalho para ir ao final do jogo (DEBUG) - Pressione 'E'
+    if ((e.key === 'e' || e.key === 'E') && gameActive) {
+        player.x = 290 * TILE_SIZE - 100;
+        player.y = 200;
+        player.vx = 0;
+        player.vy = 0;
+        player.onGround = false;
+    }
 });
 
 window.addEventListener('keyup', e => {
@@ -1329,6 +1538,14 @@ function gameOver() {
 function winGame() {
     gameActive = false;
     gameWon = true;
+    
+    // Criar explosão de confete
+    for (let i = 0; i < 80; i++) {
+        const x = player.x - cameraX + Math.random() * 50 - 25;
+        const y = player.y + Math.random() * 30;
+        confetti.push(new Confetti(x, y));
+    }
+    
     document.getElementById('final-score').textContent = `Pontuação Final: ${score}`;
     document.getElementById('win-screen').classList.remove('hidden');
 }
