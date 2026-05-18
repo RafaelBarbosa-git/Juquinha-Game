@@ -268,31 +268,46 @@ function generateMap() {
     
     // Estrutura Final: Bandeira e Python
     const flagCol = 290;
-    const flagRow = 9;
+    const flagRow = 10; // Bandeira mais próxima do chão final, facilitando o acesso
 
-    // Bandeira NO TOPO
+    // Bandeira em nível de plataforma final
     map[flagRow][flagCol] = 7;
-    // Chão abaixo
     map[flagRow + 1][flagCol] = 1;
-    
-    // Estrutura Python grande
-    const pythonCol = flagCol + 5;
-    const pythonHeight = 5;
-    const pythonWidth = 8;
-    
+
+    // Garantir chão contínuo no final e caminho até o zoológico
+    for (let col = 270; col < 296; col++) {
+        map[11][col] = 1;
+        if (col >= flagCol - 2 && col <= flagCol + 3) {
+            map[10][col] = map[10][col] || 2; // plataformas extras ao redor da bandeira
+        }
+    }
+
+    const pythonCol = flagCol + 4;
+    const pythonHeight = 3;
+    const pythonWidth = 6;
+
     for (let py = 0; py < pythonHeight; py++) {
         for (let px = 0; px < pythonWidth; px++) {
-            if (flagRow + 1 + py < mapHeight && pythonCol + px < mapWidth) {
-                map[flagRow + 1 + py][pythonCol + px] = 20;
+            const row = flagRow + 1 + py;
+            if (row < mapHeight && pythonCol + px < mapWidth) {
+                map[row][pythonCol + px] = 20;
             }
         }
     }
-    
-    // Suporte grande abaixo
-    const supportRow = flagRow + pythonHeight + 1;
-    for (let sx = -8; sx < 15; sx++) {
-        if (flagCol + sx >= 0 && flagCol + sx < mapWidth && supportRow < mapHeight) {
-            map[supportRow][flagCol + sx] = 21;
+
+    // Chão extra sob o zoológico para garantir acesso
+    for (let col = pythonCol - 2; col < pythonCol + pythonWidth + 2; col++) {
+        if (col >= 0 && col < mapWidth) {
+            map[12][col] = 1;
+            map[13][col] = 1;
+        }
+    }
+
+    const supportRow = mapHeight - 1;
+    for (let sx = -4; sx < pythonWidth + 4; sx++) {
+        const col = pythonCol + sx;
+        if (col >= 0 && col < mapWidth) {
+            map[supportRow][col] = 21;
         }
     }
 
@@ -562,6 +577,10 @@ class Player {
         } else {
             this.vy += GRAVITY;
         }
+
+        this.prevX = this.x;
+        this.prevY = this.y;
+
         this.x += this.vx;
         if (this.vx > 0) {
             this.distanceTraveled += this.vx;
@@ -593,6 +612,8 @@ class Player {
 
     checkCollisions() {
         this.onGround = false;
+        const prevX = typeof this.prevX === 'number' ? this.prevX : this.x;
+        const prevY = typeof this.prevY === 'number' ? this.prevY : this.y;
         
         for (let row = 0; row < map.length; row++) {
             for (let col = 0; col < map[row].length; col++) {
@@ -606,7 +627,7 @@ class Player {
                         this.y < ty + TILE_SIZE && this.y + this.height > ty) {
                         
                         // BANDEIRA - detecta vitória sem bloquear movimento
-                                            if (tile === 7) {
+                        if (tile === 7) {
                             score += 500; // Bônus final
                             winGame();
                             return; // Sai da função
@@ -616,37 +637,43 @@ class Player {
                         const overlapY = Math.min(this.y + this.height, ty + TILE_SIZE) - Math.max(this.y, ty);
 
                         if (overlapX <= 0 || overlapY <= 0) continue;
+
+                        const fromAbove = prevY + this.height <= ty;
+                        const fromBelow = prevY >= ty + TILE_SIZE;
+                        const fromLeft = prevX + this.width <= tx;
+                        const fromRight = prevX >= tx + TILE_SIZE;
                         
-                        // Resolva por menor overlap para evitar ficar preso entre dois blocos
-                        if (overlapY < overlapX) {
+                        if (overlapY <= overlapX || fromAbove || fromBelow) {
                             // Colisão vertical
-                            if (this.y + this.height / 2 <= ty + TILE_SIZE / 2 && this.vy > 0) {
-                                // Cair no chão
+                            if (fromAbove && this.vy >= 0) {
                                 this.vy = 0;
                                 this.y = ty - this.height;
                                 this.onGround = true;
-                            } else if (this.vy < 0) {
-                                // Bater a cabeça
+                            } else if (fromBelow && this.vy <= 0) {
                                 this.vy = 0;
                                 this.y = ty + TILE_SIZE;
                                 if (tile === 2) {
                                     score += 50;
                                     map[row][col] = 3;
-                                }
-                                else if (tile === 5) {
+                                } else if (tile === 5) {
                                     score += 80;
                                     map[row][col] = 6;
-                                    // Sorteio: 70% chance de crescimento, 30% chance de vida extra
                                     const dropType = Math.random() < 0.7 ? "growth" : "extraLife";
                                     powerUps.push(new PowerUp(tx, ty, dropType));
+                                }
+                            } else if (fromLeft || fromRight) {
+                                if (fromLeft) {
+                                    this.x = tx - this.width;
+                                } else if (fromRight) {
+                                    this.x = tx + TILE_SIZE;
                                 }
                             }
                         } else {
                             // Colisão horizontal
-                            if (tile !== 7 && tile !== 9) {
-                                if (this.x + this.width / 2 <= tx + TILE_SIZE / 2) {
+                            if (tile !== 7) {
+                                if (fromLeft) {
                                     this.x = tx - this.width;
-                                } else {
+                                } else if (fromRight) {
                                     this.x = tx + TILE_SIZE;
                                 }
                             }
@@ -1495,10 +1522,10 @@ window.addEventListener('keydown', e => {
     // Atalho para ir ao final do jogo (DEBUG) - Pressione 'E'
     if ((e.key === 'e' || e.key === 'E') && gameActive) {
         player.x = 290 * TILE_SIZE - 100;
-        player.y = 200;
         player.vx = 0;
         player.vy = 0;
-        player.onGround = false;
+        player.y = 11 * TILE_SIZE - player.height;
+        player.onGround = true;
     }
 });
 
