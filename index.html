@@ -3,47 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mundo do Juquinha - Museu Vivo</title>
+    <title>Mundo do Juquinha - Remaster</title>
+
     <style>
-        body { margin: 0; background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Courier New', Courier, monospace; }
-        #game-container { position: relative; width: 800px; height: 480px; overflow: hidden; border: 4px solid #5d4037; }
-        canvas { background: #f4a460; /* Cor de areia da Caatinga */ }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-        .screen { position: absolute; width: 100%; height: 100%; background: rgba(0,0,0,0.7); color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: all; }
-        .hidden { display: none; }
-        button { padding: 10px 20px; font-size: 20px; cursor: pointer; background: #81c784; border: none; }
-        canvas {
-    background: linear-gradient(to bottom, #4fc3f7, #f4a460); /* Céu azul para areia */
-}
+        *{
+            margin:0;
+            padding:0;
+            box-sizing:border-box;
+        }
+
+        body{
+            min-height:100vh;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            overflow:hidden;
+            background:
+                radial-gradient(circle at top,#4fc3f7 0%,#102030 70%);
+            font-family:Arial, Helvetica, sans-serif;
+        }
+
+        body::before{
+            content:'';
+            position:fixed;
+            inset:0;
+            background:
+                radial-gradient(rgba(255,255,255,.25) 1px, transparent 1px);
+            background-size:40px 40px;
+            animation:stars 15s linear infinite;
+            opacity:.35;
+        }
+
+        @keyframes stars{
+            from{transform:translateY(0px);}
+            to{transform:translateY(40px);}
+        }
+
+        #game-container{
+            position:relative;
+            width:800px;
+            height:480px;
+            overflow:hidden;
+            border-radius:22px;
+            border:4px solid rgba(255,255,255,.25);
+            box-shadow:
+                0 0 40px rgba(0,0,0,.55),
+                0 0 90px rgba(79,195,247,.15);
+        }
+
+        canvas{
+            background:
+                linear-gradient(to bottom,#63d6ff 0%,#ffd28a 75%);
+        }
+
+        #ui-layer{
+            position:absolute;
+            inset:0;
+            pointer-events:none;
+        }
+
+        .screen{
+            position:absolute;
+            inset:0;
+            display:flex;
+            flex-direction:column;
+            justify-content:center;
+            align-items:center;
+            text-align:center;
+            gap:14px;
+            background:rgba(5,10,20,.72);
+            color:white;
+            backdrop-filter: blur(6px);
+            pointer-events:all;
+        }
+
+        .screen h1{
+            font-size:54px;
+            letter-spacing:3px;
+            text-shadow:0 0 18px rgba(255,255,255,.3);
+            animation:floatTitle 3s ease-in-out infinite;
+        }
+
+        @keyframes floatTitle{
+            0%,100%{transform:translateY(0px);}
+            50%{transform:translateY(-8px);}
+        }
+
+        .screen p{
+            max-width:600px;
+            line-height:1.5;
+            opacity:.95;
+        }
+
+        .hidden{
+            display:none;
+        }
+
+        .menu-card{
+            background:rgba(255,255,255,.08);
+            border:1px solid rgba(255,255,255,.15);
+            border-radius:18px;
+            padding:24px;
+            box-shadow:0 10px 35px rgba(0,0,0,.3);
+        }
+
+        button{
+            margin-top:10px;
+            padding:14px 28px;
+            border:none;
+            border-radius:14px;
+            cursor:pointer;
+            color:white;
+            font-size:18px;
+            font-weight:bold;
+            background:linear-gradient(135deg,#00c853,#00e676);
+            transition:.25s;
+        }
+
+        button:hover{
+            transform:translateY(-3px) scale(1.03);
+            box-shadow:0 10px 30px rgba(0,230,118,.35);
+        }
+
+        .tips{
+            text-align:left;
+            margin-top:10px;
+        }
+
+        .tips p{
+            margin:5px 0;
+        }
     </style>
 </head>
 <body>
 
 <div id="game-container">
     <canvas id="gameCanvas" width="800" height="480"></canvas>
+
     <div id="ui-layer">
-        <!-- Tela de Início -->
+
         <div id="start-screen" class="screen">
-            <h1>MUNDO DO JUQUINHA</h1>
-            <p>Museu Vivo dos Répteis da Caatinga</p>
-            <p>Sua missão é chegar até a bandeira no final do caminho.</p>
-            <div style="margin: 15px 0; text-align: left; max-width: 420px;">
-                <p><strong>CONTROLES:</strong> A/D ou ←/→ para andar, W ou ↑ para pular</p>
-                <p><strong>OBJETIVO:</strong> avance pelo cenário e alcance a bandeira no final da fase.</p>
+            <div class="menu-card">
+                <h1>🌵 MUNDO DO JUQUINHA</h1>
+
+                <p>
+                    Explore a Caatinga, derrote criaturas e alcance a bandeira final
+                    nessa nova versão remasterizada.
+                </p>
+
+                <div class="tips">
+                    <p>🎮 A / D ou ← → para movimentar</p>
+                    <p>🦘 W / ↑ / Espaço para pular</p>
+                    <p>❤️ Agora você possui 3 corações</p>
+                </div>
+
+                <button onclick="startGame()">
+                    INICIAR AVENTURA
+                </button>
             </div>
-            <button onclick="startGame()">INICIAR AVENTURA</button>
         </div>
-        <!-- Game Over -->
+
         <div id="game-over" class="screen hidden">
-            <h1>GAME OVER</h1>
-            <button onclick="restartGame()">TENTAR NOVAMENTE</button>
+            <div class="menu-card">
+                <h1>💀 GAME OVER</h1>
+                <p>O Juquinha foi derrotado na Caatinga...</p>
+                <button onclick="restartGame()">TENTAR NOVAMENTE</button>
+            </div>
         </div>
-        <!-- Tela de Vitória -->
+
         <div id="win-screen" class="screen hidden">
-            <h1>VOCÊ VENCEU! 🎉</h1>
-            <p id="final-score">Pontuação Final: 0</p>
-            <button onclick="restartGame()">JOGAR NOVAMENTE</button>
+            <div class="menu-card">
+                <h1>🏆 VOCÊ VENCEU!</h1>
+                <p id="final-score">Pontuação Final: 0</p>
+                <button onclick="restartGame()">JOGAR NOVAMENTE</button>
+            </div>
         </div>
+
     </div>
 </div>
 

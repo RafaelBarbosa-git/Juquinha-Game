@@ -491,6 +491,7 @@ class Player {
         this.x = 100;
         this.y = 200;
         this.width = 32;
+            this.animationOffset = 0;
         this.height = 55;
         this.vx = 0;
         this.vy = 0;
@@ -499,7 +500,7 @@ class Player {
         this.color = "#4CAF50";
         this.facing = 1; // 1 = direita, -1 = esquerda
         if (!keepLives) {
-            this.lives = 1; // Começa com 1 vida
+            this.lives = 3; // Começa com 1 vida
         }
         this.hasPowerUp = false; // Flag se tem power-up ativo
         this.invulnerableTimer = 0;
@@ -1109,7 +1110,12 @@ function drawMap() {
     }
 }
 
+
 function update() {
+
+    // efeito de câmera suave
+    canvas.style.transform = `translateY(${Math.sin(Date.now() * 0.003) * 1.5}px)`;
+
     if (!gameActive) return;
     if (gameWon) return; // Pausa se ganhou
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1200,28 +1206,36 @@ function update() {
         }
     });
 
-    // Fundo do HUD para garantir legibilidade
-    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
-    ctx.fillRect(10, 10, 340, 130);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+    
+    // HUD Remasterizado
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fillRect(12, 12, 360, 100);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
     ctx.lineWidth = 2;
-    ctx.strokeRect(10, 10, 340, 130);
+    ctx.strokeRect(12,12,360,100);
 
     ctx.fillStyle = "white";
     ctx.font = "bold 22px Arial";
-    ctx.fillText(`PONTOS: ${score}`, 22, 38);
-    ctx.fillText(`VIDAS: ${player.lives}`, 22, 70);
-    ctx.fillText(`OBJETIVO: PEGUE A BANDEIRA`, 22, 102);
+    ctx.fillText(`PONTOS: ${score}`, 28, 42);
+
+    ctx.font = "bold 20px Arial";
+    ctx.fillText("VIDA:", 28, 76);
+
+    const hearts = "❤️".repeat(player.lives) + "🖤".repeat(3-player.lives);
+    ctx.font = "24px Arial";
+    ctx.fillText(hearts, 110, 78);
 
     if (player.hasPowerUp) {
         ctx.fillStyle = "#FFD700";
         ctx.font = "bold 18px Arial";
-        ctx.fillText("⭐ PROTEGIDO", canvas.width - 230, 40);
+        ctx.fillText("⭐ POWER-UP ATIVO", canvas.width - 250, 40);
     }
 
-    ctx.fillStyle = "rgba(255,255,255,0.75)";
+    ctx.fillStyle = "rgba(255,255,255,0.8)";
     ctx.font = "16px Arial";
-    ctx.fillText("CONTROLES: A/D = mover, W = pular", 20, canvas.height - 20);
+    ctx.fillText("A/D mover  •  W pular", 20, canvas.height - 20);
+
 
     animationId = requestAnimationFrame(update);
 }
