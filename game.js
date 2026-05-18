@@ -17,6 +17,9 @@ enemyImage.src = "img/prea.png";
 // Imagem do power-up (vida extra)
 const powerUpImage = new Image();
 powerUpImage.src = "img/powerup.png";
+// Imagem do power-up de vida extra
+const extraLifePowerUpImage = new Image();
+extraLifePowerUpImage.src = "img/vida-extra.png";
 // Imagem do bloco de tijolos
 const brickTileImage = new Image();
 brickTileImage.src = "img/brick_tile.png";
@@ -96,16 +99,23 @@ function generateMap() {
         
         // Plataformas flutuantes simples e próximas para encher o cenário
         if (col > 15 && col < 48) {
-            if (col % 9 === 0) {
+            if (col % 8 === 0) {
                 map[7][col] = 2;
                 map[7][col + 1] = 2;
             }
-            if (col % 10 === 3) {
+            if (col % 9 === 3) {
                 map[8][col] = 2;
                 map[8][col + 1] = 2;
             }
-            if (col % 7 === 2 && Math.random() < 0.45) {
+            if (col % 7 === 2) {
+                map[9][col] = 2;
+            }
+            if (col % 6 === 1 && Math.random() < 0.4) {
                 map[6][col] = 5;
+            }
+            // Aumentar blocos aéreos no início
+            if (col % 11 === 0 && Math.random() < 0.82) {
+                map[9][col] = 4;
             }
         }
     }
@@ -155,13 +165,13 @@ function generateMap() {
                 createGroundCactus(col);
             }
         }
-        if (col % 11 === 5 && Math.random() < 0.45) {
+        if (col % 11 === 5 && Math.random() < 0.65) {
             map[8][col] = 2;
         }
-        if (col % 13 === 2 && Math.random() < 0.34) {
-            map[7][col] = 5;
+        if (col % 13 === 2 && Math.random() < 0.3) {
+            map[6][col] = 5;
         }
-        if (col % 9 === 4 && Math.random() < 0.33 && !map[6][col]) {
+        if (col % 9 === 4 && Math.random() < 0.45) {
             map[6][col] = 2;
         }
     }
@@ -209,13 +219,13 @@ function generateMap() {
                 createGroundCactus(col);
             }
         }
-        if (col % 7 === 0 && Math.random() < 0.42) {
+        if (col % 7 === 0 && Math.random() < 0.52) {
             map[6][col] = 2;
         }
-        if (col % 10 === 4 && Math.random() < 0.38) {
+        if (col % 10 === 4 && Math.random() < 0.35) {
             map[8][col] = 5;
         }
-        if (col % 8 === 2 && Math.random() < 0.28) {
+        if (col % 8 === 2 && Math.random() < 0.48) {
             map[7][col] = 2;
         }
     }
@@ -618,7 +628,9 @@ class Player {
                                 else if (tile === 5) {
                                     score += 80;
                                     map[row][col] = 6;
-                                    powerUps.push(new PowerUp(tx, ty));
+                                    // Sorteio: 70% chance de crescimento, 30% chance de vida extra
+                                    const dropType = Math.random() < 0.7 ? "growth" : "extraLife";
+                                    powerUps.push(new PowerUp(tx, ty, dropType));
                                 }
                             }
                         } else {
@@ -772,13 +784,20 @@ class Enemy {
 }
 
 class PowerUp {
-    constructor(x, y) {
+    constructor(x, y, type = "growth") {
         this.x = x + TILE_SIZE / 2 - 15; // Centraliza horizontalmente
         this.y = y - TILE_SIZE; // Aparece acima do bloco
         this.width = 30;
         this.height = 30;
         this.vy = 0; // Velocidade vertical (cai)
-        this.color = "#FFD700"; // Cor dourada
+        this.type = type; // "growth" ou "extraLife"
+        
+        // Cores diferentes para cada tipo
+        if (type === "extraLife") {
+            this.color = "#FF1493"; // Rosa/Magenta para vida extra
+        } else {
+            this.color = "#FFD700"; // Cor dourada padrão
+        }
     }
 
     update() {
@@ -815,17 +834,34 @@ class PowerUp {
     }
 
     draw() {
-        if (powerUpImage.complete && powerUpImage.naturalWidth !== 0) {
-            ctx.drawImage(powerUpImage, this.x - cameraX, this.y, this.width, this.height);
+        if (this.type === "extraLife") {
+            // Desenho para power-up de vida extra
+            if (extraLifePowerUpImage.complete && extraLifePowerUpImage.naturalWidth !== 0) {
+                ctx.drawImage(extraLifePowerUpImage, this.x - cameraX, this.y, this.width, this.height);
+            } else {
+                // Fallback: desenho com coração
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x - cameraX, this.y, this.width, this.height);
+                ctx.fillStyle = "black";
+                ctx.font = "bold 16px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("❤️", this.x - cameraX + this.width / 2, this.y + this.height / 2 + 5);
+                ctx.textAlign = "left";
+            }
         } else {
-            // Desenho padrão se a imagem não carregar
-            ctx.fillStyle = this.color;
-            ctx.fillRect(this.x - cameraX, this.y, this.width, this.height);
-            ctx.fillStyle = "black";
-            ctx.font = "bold 16px Arial";
-            ctx.textAlign = "center";
-            ctx.fillText("★", this.x - cameraX + this.width / 2, this.y + this.height / 2 + 5);
-            ctx.textAlign = "left";
+            // Power-up de crescimento padrão
+            if (powerUpImage.complete && powerUpImage.naturalWidth !== 0) {
+                ctx.drawImage(powerUpImage, this.x - cameraX, this.y, this.width, this.height);
+            } else {
+                // Desenho padrão se a imagem não carregar
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x - cameraX, this.y, this.width, this.height);
+                ctx.fillStyle = "black";
+                ctx.font = "bold 16px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("★", this.x - cameraX + this.width / 2, this.y + this.height / 2 + 5);
+                ctx.textAlign = "left";
+            }
         }
     }
 
@@ -1151,11 +1187,21 @@ function update() {
         } 
         // Verificar colisão com player
         else if (powerUps[i].checkCollision(player)) {
-            // Só coleta o power-up se não tem um ativo
-            if (!player.hasPowerUp) {
-                player.hasPowerUp = true;
-                player.isBig = true; // Crescer quando coleta power-up
-                score += 300; // Bônus por pegar power-up
+            if (powerUps[i].type === "extraLife") {
+                // Power-up de vida extra
+                if (player.lives < 3) {
+                    player.lives++;
+                    score += 250; // Bônus por pegar vida extra
+                } else {
+                    score += 250; // Mesmo assim ganha pontos
+                }
+            } else {
+                // Power-up de crescimento (padrão)
+                if (!player.hasPowerUp) {
+                    player.hasPowerUp = true;
+                    player.isBig = true; // Crescer quando coleta power-up
+                    score += 300; // Bônus por pegar power-up
+                }
             }
             powerUps.splice(i, 1);
         }
