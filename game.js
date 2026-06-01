@@ -85,36 +85,37 @@ const keys = { right: false, left: false, up: false };
 
 // --- MAPA GERADO PROCEDURALMENTE ---
 let map = [];
+let worldEndX = Infinity; // Limite invisível após o zoológico
 
 // --- CONFIGURAÇÃO DE NÍVEIS ---
 const LEVEL_CONFIG = {
     1: {
-        mapWidth: 300,
+        mapWidth: 180,
         sections: [
-            { name: "Inicial", range: [0, 50], groundChance: 0.9, platformChance: 0.8, platformDensity: 0.82 },
-            { name: "Fácil-Média", range: [50, 150], groundChance: 0.9, platformChance: 0.8, platformDensity: 0.65 },
-            { name: "Média-Difícil", range: [150, 240], groundChance: 0.5, platformChance: 0.85, platformDensity: 0.35 },
-            { name: "Final", range: [240, 285], groundChance: 0.65, platformChance: 0.76, platformDensity: 0.28 }
+            { name: "Inicial", range: [0, 30], groundChance: 0.9, platformChance: 0.8, platformDensity: 0.82 },
+            { name: "Fácil-Média", range: [30, 90], groundChance: 0.9, platformChance: 0.8, platformDensity: 0.65 },
+            { name: "Média-Difícil", range: [90, 144], groundChance: 0.5, platformChance: 0.85, platformDensity: 0.35 },
+            { name: "Final", range: [144, 171], groundChance: 0.65, platformChance: 0.76, platformDensity: 0.28 }
         ],
         finalBlockCount: 15
     },
     2: {
-        mapWidth: 350,
+        mapWidth: 210,
         sections: [
-            { name: "Inicial", range: [0, 60], groundChance: 0.85, platformChance: 0.72, platformDensity: 0.73 },
-            { name: "Fácil-Média", range: [60, 170], groundChance: 0.81, platformChance: 0.72, platformDensity: 0.585 },
-            { name: "Média-Difícil", range: [170, 280], groundChance: 0.4, platformChance: 0.765, platformDensity: 0.315 },
-            { name: "Final", range: [280, 330], groundChance: 0.585, platformChance: 0.684, platformDensity: 0.252 }
+            { name: "Inicial", range: [0, 36], groundChance: 0.85, platformChance: 0.72, platformDensity: 0.73 },
+            { name: "Fácil-Média", range: [36, 102], groundChance: 0.81, platformChance: 0.72, platformDensity: 0.585 },
+            { name: "Média-Difícil", range: [102, 168], groundChance: 0.4, platformChance: 0.765, platformDensity: 0.315 },
+            { name: "Final", range: [168, 198], groundChance: 0.585, platformChance: 0.684, platformDensity: 0.252 }
         ],
         finalBlockCount: 15
     },
     3: {
-        mapWidth: 400,
+        mapWidth: 240,
         sections: [
-            { name: "Inicial", range: [0, 70], groundChance: 0.81, platformChance: 0.648, platformDensity: 0.657 },
-            { name: "Fácil-Média", range: [70, 190], groundChance: 0.729, platformChance: 0.648, platformDensity: 0.527 },
-            { name: "Média-Difícil", range: [190, 320], groundChance: 0.3, platformChance: 0.6885, platformDensity: 0.283 },
-            { name: "Final", range: [320, 380], groundChance: 0.5265, platformChance: 0.6156, platformDensity: 0.2268 }
+            { name: "Inicial", range: [0, 42], groundChance: 0.81, platformChance: 0.648, platformDensity: 0.657 },
+            { name: "Fácil-Média", range: [42, 114], groundChance: 0.729, platformChance: 0.648, platformDensity: 0.527 },
+            { name: "Média-Difícil", range: [114, 192], groundChance: 0.3, platformChance: 0.6885, platformDensity: 0.283 },
+            { name: "Final", range: [192, 228], groundChance: 0.5265, platformChance: 0.6156, platformDensity: 0.2268 }
         ],
         finalBlockCount: 15
     }
@@ -166,7 +167,11 @@ function generateMap(level = 1) {
             
             // Chão com progressão - NÃO sobrescrever se já existe
             const groundChance = section.groundChance - sectionProg * 0.15;
-            if (Math.random() < groundChance && !map[10][col] && !map[11][col]) {
+            // Verificar quantos buracos consecutivos existem antes desta coluna
+            const holesBefore = (col >= 1 && !map[10][col - 1]) ? (col >= 2 && !map[10][col - 2] ? 2 : 1) : 0;
+            // Forçar chão se já há 2 buracos consecutivos (máximo de 2 blocos de largura)
+            const forceGround = holesBefore >= 2;
+            if ((forceGround || Math.random() < groundChance) && !map[10][col] && !map[11][col]) {
                 map[10][col] = 1;
                 map[11][col] = 1;
             }
@@ -257,10 +262,27 @@ function generateMap(level = 1) {
             blocksPlaced++;
         }
     }
+
+    // Garantir que nenhum buraco na seção final tenha mais de 2 blocos de largura
+    for (let col = finalStart + 2; col < finalEnd - 20; col++) {
+        if (!map[10][col] && !map[10][col - 1] && !map[10][col - 2]) {
+            map[10][col] = 1;
+            map[11][col] = 1;
+        }
+    }
     
     // BANDEIRA E ZOOLÓGICO - zona reservada e clara
     const flagCol = finalEnd - 15;
     const flagRow = 10;
+
+    // Limpar completamente a área da bandeira (remover qualquer bloco que possa ter sido gerado)
+    for (let clearCol = flagCol - 1; clearCol <= flagCol + 1; clearCol++) {
+        for (let clearRow = 0; clearRow < flagRow; clearRow++) {
+            if (clearCol >= 0 && clearCol < mapWidth) {
+                map[clearRow][clearCol] = 0;
+            }
+        }
+    }
 
     // Bandeira em nível de plataforma final
     map[flagRow][flagCol] = 7;
@@ -333,6 +355,9 @@ function generateMap(level = 1) {
     
     // Criar instância do zoológico
     zoo = new ZooBuilding(pythonCol, flagRow + 1);
+
+    // Limite invisível após o zoológico (impede o jogador de ir além)
+    worldEndX = (pythonCol + pythonWidth + 3) * TILE_SIZE;
 }
 
 // Validar se um bloco pode ser colocado sem bloquear passagem
@@ -775,6 +800,10 @@ class Player {
         this.y += this.vy;
 
         if (this.x < 0) this.x = 0; // Limite esquerdo
+        if (this.x + this.width > worldEndX) { // Limite direito (após zoológico)
+            this.x = worldEndX - this.width;
+            this.vx = 0;
+        }
 
         this.checkCollisions();
 
@@ -1184,8 +1213,8 @@ class Cactus {
                 gameOver();
                 return;
             } else {
-                player.x = 100;
-                player.y = 200;
+                // Mantém posição X do jogador, apenas reseta velocidade e estado
+                player.y = Math.min(player.y, 11 * 40 - player.height);
                 player.vx = 0;
                 player.vy = 0;
                 player.onGround = false;
@@ -1687,8 +1716,8 @@ function update() {
                         gameOver();
                     } else {
                         // Reinicializa o player mantendo pontos e vidas
-                        player.x = 100;
-                        player.y = 200;
+                        // Mantém posição X do jogador, apenas reseta velocidade e estado
+                        player.y = Math.min(player.y, 11 * 40 - player.height);
                         player.vx = 0;
                         player.vy = 0;
                         player.onGround = false;
@@ -1742,11 +1771,13 @@ window.addEventListener('keydown', e => {
     
     // Atalho para ir ao final do jogo (DEBUG) - Pressione 'E'
     if ((e.key === 'e' || e.key === 'E') && gameActive) {
-        player.x = 290 * TILE_SIZE - 100;
+        // Posiciona o jogador 10 tiles antes do limite do mundo (antes da bandeira)
+        player.x = Math.max(0, worldEndX - 10 * TILE_SIZE);
         player.vx = 0;
         player.vy = 0;
         player.y = 11 * TILE_SIZE - player.height;
         player.onGround = true;
+        cameraX = Math.max(0, player.x - canvas.width / 2);
     }
 });
 
