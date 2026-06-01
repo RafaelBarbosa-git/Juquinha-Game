@@ -50,7 +50,7 @@ const TILE_SIZE = 40;
 const GRAVITY = 0.6;
 const JUMP_FORCE = -10;
 const JUMP_HOLD_FRAMES = 12;
-const SPEED = 2.5; // Reduzido de 5 para mais controle
+const SPEED = 2.0; // Reduzido para velocidade mais controlada
 
 // --- ESTADO DO JOGO ---
 let gameActive = false;
@@ -62,6 +62,7 @@ let cacti = []; // Array de cactos (objetos separados)
 let confetti = []; // Array de partículas confete para celebração
 let flagAnimationTime = 0; // Tempo para animação da bandeira
 let zooBuildingAnimation = 0; // Tempo para animação do zoológico
+let currentLevel = 1; // Nível atual
 
 // --- CÂMERA ---
 let cameraX = 0;
@@ -85,8 +86,43 @@ const keys = { right: false, left: false, up: false };
 // --- MAPA GERADO PROCEDURALMENTE ---
 let map = [];
 
-function generateMap() {
-    const mapWidth = 300;
+// --- CONFIGURAÇÃO DE NÍVEIS ---
+const LEVEL_CONFIG = {
+    1: {
+        mapWidth: 300,
+        sections: [
+            { name: "Inicial", range: [0, 50], groundChance: 0.9, platformChance: 0.8, platformDensity: 0.82 },
+            { name: "Fácil-Média", range: [50, 150], groundChance: 0.9, platformChance: 0.8, platformDensity: 0.65 },
+            { name: "Média-Difícil", range: [150, 240], groundChance: 0.5, platformChance: 0.85, platformDensity: 0.35 },
+            { name: "Final", range: [240, 285], groundChance: 0.65, platformChance: 0.76, platformDensity: 0.28 }
+        ],
+        finalBlockCount: 15
+    },
+    2: {
+        mapWidth: 350,
+        sections: [
+            { name: "Inicial", range: [0, 60], groundChance: 0.85, platformChance: 0.72, platformDensity: 0.73 },
+            { name: "Fácil-Média", range: [60, 170], groundChance: 0.81, platformChance: 0.72, platformDensity: 0.585 },
+            { name: "Média-Difícil", range: [170, 280], groundChance: 0.4, platformChance: 0.765, platformDensity: 0.315 },
+            { name: "Final", range: [280, 330], groundChance: 0.585, platformChance: 0.684, platformDensity: 0.252 }
+        ],
+        finalBlockCount: 15
+    },
+    3: {
+        mapWidth: 400,
+        sections: [
+            { name: "Inicial", range: [0, 70], groundChance: 0.81, platformChance: 0.648, platformDensity: 0.657 },
+            { name: "Fácil-Média", range: [70, 190], groundChance: 0.729, platformChance: 0.648, platformDensity: 0.527 },
+            { name: "Média-Difícil", range: [190, 320], groundChance: 0.3, platformChance: 0.6885, platformDensity: 0.283 },
+            { name: "Final", range: [320, 380], groundChance: 0.5265, platformChance: 0.6156, platformDensity: 0.2268 }
+        ],
+        finalBlockCount: 15
+    }
+};
+
+function generateMap(level = 1) {
+    const config = LEVEL_CONFIG[level] || LEVEL_CONFIG[1];
+    const mapWidth = config.mapWidth;
     const mapHeight = 14;
     cacti = [];
     powerUps = [];
@@ -97,191 +133,150 @@ function generateMap() {
         map[row] = new Array(mapWidth).fill(0);
     }
     
-    // SEÇÃO INICIAL SEGURA (colunas 0-50): Chão sólido com plataformas progressivas
-    for (let col = 0; col < 50; col++) {
+    // SEÇÃO SEGURA INICIAL (0-80): Totalmente segura para o jogador começar
+    for (let col = 0; col < 80; col++) {
+        // Chão sólido contínuo - sem buracos
         map[10][col] = 1;
         map[11][col] = 1;
         
-        // Plataformas flutuantes simples e próximas para encher o cenário
-        if (col > 15 && col < 48) {
-            if (col % 8 === 0) {
-                map[7][col] = 2;
-                map[7][col + 1] = 2;
-            }
-            if (col % 9 === 3) {
+        // Plataformas simples APENAS a partir de col 40
+        if (col > 40 && col < 75) {
+            if (col % 9 === 0 && !map[8][col]) {
                 map[8][col] = 2;
                 map[8][col + 1] = 2;
             }
-            if (col % 7 === 2) {
-                map[9][col] = 2;
-            }
-            if (col % 6 === 1 && Math.random() < 0.4) {
-                map[6][col] = 5;
-            }
-            // Aumentar blocos aéreos no início
-            if (col % 11 === 0 && Math.random() < 0.82) {
-                map[9][col] = 4;
+            if (col % 7 === 3 && !map[7][col]) {
+                if (isValidHighBlockPlacement(col, 7)) {
+                    map[7][col] = 2;
+                }
             }
         }
     }
     
-    // SEÇÃO FÁCIL-MÉDIA (colunas 50-150): Progressão constante
-    for (let col = 50; col < 150; col++) {
-        const sectionProg = (col - 50) / 100; // 0 a 1
+    // Processar seções de dificuldade (começando depois da zona segura)
+    for (const section of config.sections) {
+        const [startCol, endCol] = section.range;
         
-        // Chão: começa contínuo, vai ficando com mais buracos
-        const groundChance = 0.9 - sectionProg * 0.4; // 90% -> 50%
-        if (Math.random() < groundChance) {
-            map[10][col] = 1;
-            map[11][col] = 1;
-        }
+        // Pular seção segura inicial
+        const actualStart = Math.max(startCol, 80);
+        if (actualStart >= endCol) continue;
         
-        // Plataformas flutuantes em SEQUÊNCIAS PRÓXIMAS
-        // A cada 12-15 colunas, colocar um grupo de plataformas
-        const groupPeriod = 12;
-        const colInGroup = (col - 50) % groupPeriod;
-        
-        if (colInGroup === 0 && Math.random() < 0.8) {
-            // Grupo de 3-4 blocos flutuantes próximos
-            const groupSize = 3;
-            const startRow = Math.random() < 0.5 ? 7 : 8;
+        for (let col = actualStart; col < endCol; col++) {
+            const sectionProg = (col - actualStart) / (endCol - actualStart); // 0 a 1 dentro da seção
             
-            for (let i = 0; i < groupSize; i++) {
-                if (col + i < 150 && !map[startRow][col + i]) {
-                    const tileType = Math.random() < 0.2 ? 5 : 2;
-                    map[startRow][col + i] = tileType;
-                    
-                    // Adicionar um bloco intermediário para criar "escada"
-                    if (i > 0 && startRow > 6 && Math.random() < 0.4) {
-                        const intermediateRow = startRow + 1;
-                        if (!map[intermediateRow][col + i - 1]) {
-                            map[intermediateRow][col + i - 1] = 2;
+            // Chão com progressão - NÃO sobrescrever se já existe
+            const groundChance = section.groundChance - sectionProg * 0.15;
+            if (Math.random() < groundChance && !map[10][col] && !map[11][col]) {
+                map[10][col] = 1;
+                map[11][col] = 1;
+            }
+            
+            // Plataformas flutuantes em grupos - evitar overlap
+            const groupPeriod = 12;
+            const colInGroup = (col - actualStart) % groupPeriod;
+            
+            if (colInGroup === 0 && Math.random() < section.platformChance) {
+                const groupSize = 3;
+                const startRow = Math.random() < 0.5 ? 7 : 8;
+                
+                for (let i = 0; i < groupSize; i++) {
+                    if (col + i < endCol && !map[startRow][col + i]) {
+                        // Validar blocos altos (row 7) antes de colocar
+                        if (startRow === 7 && !isValidHighBlockPlacement(col + i, 7)) {
+                            continue;
+                        }
+                        
+                        const tileType = Math.random() < 0.2 ? 5 : 2;
+                        map[startRow][col + i] = tileType;
+                        
+                        // Blocos intermediários para criar "escada"
+                        if (i > 0 && startRow > 6 && Math.random() < 0.6) {
+                            const intermediateRow = startRow + 1;
+                            if (!map[intermediateRow][col + i - 1]) {
+                                map[intermediateRow][col + i - 1] = 2;
+                            }
                         }
                     }
                 }
             }
-        }
-        
-        // Mandacaru ocasional (ou cacto como objeto)
-        if (col % 18 === 0 && Math.random() < 0.64) {
-            if (Math.random() < 0.48) {
-                map[9][col] = 4;
-            } else {
-                createGroundCactus(col);
-            }
-        }
-        if (col % 11 === 5 && Math.random() < 0.65) {
-            map[8][col] = 2;
-        }
-        if (col % 13 === 2 && Math.random() < 0.3) {
-            map[6][col] = 5;
-        }
-        if (col % 9 === 4 && Math.random() < 0.45) {
-            map[6][col] = 2;
-        }
-    }
-    
-    // SEÇÃO MÉDIA-DIFÍCIL (colunas 150-240): Mais desafio
-    for (let col = 150; col < 240; col++) {
-        const sectionProg = (col - 150) / 90; // 0 a 1
-        
-        // Chão com mais buracos: 50% -> 30%
-        const groundChance = 0.50 - sectionProg * 0.2;
-        if (Math.random() < groundChance) {
-            map[10][col] = 1;
-            map[11][col] = 1;
-        }
-        
-        // Plataformas flutuantes MAIS FREQUENTES
-        const groupPeriod = 10;
-        const colInGroup = (col - 150) % groupPeriod;
-        
-        if (colInGroup === 0 && Math.random() < 0.85) {
-            const groupSize = 3;
-            const startRow = 6 + Math.floor(Math.random() * 3); // Variar altura
             
-            for (let i = 0; i < groupSize; i++) {
-                if (col + i < 240 && !map[startRow][col + i]) {
-                    const tileType = Math.random() < 0.25 ? 5 : 2;
-                    map[startRow][col + i] = tileType;
-                    
-                    // IMPORTANTE: Adicionar blocos intermediários para criar "escada"
-                    if (i > 0 && startRow > 6) {
-                        const intermediateRow = startRow + 1;
-                        if (!map[intermediateRow][col + i - 1] && Math.random() < 0.6) {
-                            map[intermediateRow][col + i - 1] = 2;
-                        }
-                    }
+            // Mandacaru ocasional - começar a partir de col 50, NÃO colocar se já tem algo
+            if (col > 50 && col % 18 === 0 && Math.random() < section.platformDensity && !map[8][col]) {
+                // Verificar se há buraco pequeno abaixo do mandacaru
+                const hasSmallHole = !map[10][col] && !map[11][col];
+                
+                if (Math.random() < 0.48 && !hasSmallHole) {
+                    // Mandacaru AÉREO - garantir que fica no ar (row 8) e não há buraco pequeno
+                    map[8][col] = 4;
+                } else if (col > 80 && isValidCactusPlacement(col)) {
+                    // Cactos no chão - com validação
+                    createGroundCactus(col);
+                }
+            }
+            
+            // Blocos extras - NÃO colocar se já existe bloco
+            if (col % 11 === 5 && Math.random() < section.platformDensity * 0.7 && !map[8][col]) {
+                if (isValidBlockPlacement(col, 8)) {
+                    map[8][col] = 2;
+                }
+            }
+            if (col % 13 === 2 && Math.random() < section.platformDensity * 0.3 && !map[6][col]) {
+                if (isValidBlockPlacement(col, 6) && isValidHighBlockPlacement(col, 6)) {
+                    map[6][col] = 5;
+                }
+            }
+            if (col % 9 === 4 && Math.random() < section.platformDensity * 0.45 && !map[6][col]) {
+                if (isValidBlockPlacement(col, 6) && isValidHighBlockPlacement(col, 6)) {
+                    map[6][col] = 2;
                 }
             }
         }
-        
-        // Mandacaru frequente (ou cacto como objeto)
-        if (Math.random() < 0.18) {
-            if (Math.random() < 0.65) {
-                map[9][col] = 4;
-            } else {
-                createGroundCactus(col);
-            }
-        }
-        if (col % 7 === 0 && Math.random() < 0.52) {
-            map[6][col] = 2;
-        }
-        if (col % 10 === 4 && Math.random() < 0.35) {
-            map[8][col] = 5;
-        }
-        if (col % 8 === 2 && Math.random() < 0.48) {
-            map[7][col] = 2;
-        }
     }
     
-    // SEÇÃO FINAL (colunas 240-300): Preparação para objetivo
-    for (let col = 240; col < 270; col++) {
-        // Chão ocasional mais preenchida e com blocos extras
-        if (Math.random() < 0.65) {
+    // SEÇÃO FINAL - com exatamente 15 blocos (LÓGICA SEPARADA E LIMPA)
+    const finalConfig = config.sections[config.sections.length - 1];
+    const [finalStart, finalEnd] = finalConfig.range;
+    const finalLength = finalEnd - finalStart;
+    let blocksPlaced = 0;
+    const targetBlocks = config.finalBlockCount;
+    const spacing = Math.floor(finalLength / targetBlocks);
+    
+    // Limpar APENAS a seção final de blocos de chão conflitantes
+    for (let col = finalStart; col < finalEnd; col++) {
+        // NÃO limpar se é zona de bandeira/zoológico
+        if (col >= finalEnd - 20) continue;
+        map[10][col] = 0;
+        map[11][col] = 0;
+    }
+    
+    // Colocar exatamente 15 blocos espaçados na seção final
+    for (let col = finalStart; col < finalEnd && blocksPlaced < targetBlocks; col += spacing) {
+        if (col < finalEnd - 20) { // Não colocar na zona da bandeira
             map[10][col] = 1;
             map[11][col] = 1;
-        }
-        
-        if (col % 5 === 0 && Math.random() < 0.76) {
-            map[8][col] = Math.random() < 0.45 ? 5 : 2;
-        }
-        
-        if (col % 9 === 3 && Math.random() < 0.52) {
-            map[7][col] = 2;
-        }
-        
-        if (col % 11 === 6 && Math.random() < 0.35) {
-            map[9][col] = 4;
-        }
-        
-        if (col % 6 === 1 && Math.random() < 0.28) {
-            map[6][col] = 2;
+            blocksPlaced++;
         }
     }
     
-    // Recta final reta para a bandeira (colunas 270-290)
-    for (let col = 270; col < 290; col++) {
-        map[10][col] = 1;
-        map[11][col] = 1;
-    }
-    
-    // Estrutura Final: Bandeira e Python
-    const flagCol = 290;
-    const flagRow = 10; // Bandeira mais próxima do chão final, facilitando o acesso
+    // BANDEIRA E ZOOLÓGICO - zona reservada e clara
+    const flagCol = finalEnd - 15;
+    const flagRow = 10;
 
     // Bandeira em nível de plataforma final
     map[flagRow][flagCol] = 7;
     map[flagRow + 1][flagCol] = 1;
 
-    // Garantir chão contínuo no final e caminho até o zoológico
-    for (let col = 270; col < 296; col++) {
-        map[11][col] = 1;
-        if (col >= flagCol - 2 && col <= flagCol + 3) {
-            map[10][col] = map[10][col] || 2; // plataformas extras ao redor da bandeira
+    // Garantir chão contínuo no final (zona de bandeira protegida)
+    for (let col = flagCol - 2; col <= flagCol + 3; col++) {
+        if (col < mapWidth) {
+            map[11][col] = 1;
+            if (col >= flagCol - 2 && col <= flagCol + 3) {
+                map[10][col] = map[10][col] || 2;
+            }
         }
     }
 
+    // Estrutura Final: Zoológico (Python)
     const pythonCol = flagCol + 4;
     const pythonHeight = 3;
     const pythonWidth = 6;
@@ -295,7 +290,7 @@ function generateMap() {
         }
     }
 
-    // Chão extra sob o zoológico para garantir acesso
+    // Chão extra sob o zoológico
     for (let col = pythonCol - 2; col < pythonCol + pythonWidth + 2; col++) {
         if (col >= 0 && col < mapWidth) {
             map[12][col] = 1;
@@ -312,60 +307,237 @@ function generateMap() {
     }
 
     fixMapPassability(mapWidth);
-
-    // Adiciona alguns cactos garantidos em colunas de teste (facilita verificação)
-    const guaranteedCactusCols = [10, 25, 50, 70, 90, 170, 220];
+    
+    // Adicionar mais cactos garantidos no caminho com validação
+    const guaranteedCactusCols = [30, 50, 70, 90, 110, 140, 170, 200, 230, 260];
     for (const ccol of guaranteedCactusCols) {
-        if (ccol >= 0 && ccol < mapWidth) {
-            createGroundCactus(ccol);
+        if (ccol >= 0 && ccol < mapWidth && !cacti.find(c => c.col === ccol)) {
+            // Usar validação para garantir que cacto não bloqueia passagem
+            if (isValidCactusPlacement(ccol)) {
+                createGroundCactus(ccol);
+            } else {
+                // Se a coluna não é válida, tentar próximas colunas (±1, ±2, ±3)
+                let placed = false;
+                for (let offset = 1; offset <= 3 && !placed; offset++) {
+                    if (ccol + offset < mapWidth && isValidCactusPlacement(ccol + offset)) {
+                        createGroundCactus(ccol + offset);
+                        placed = true;
+                    } else if (ccol - offset >= 0 && isValidCactusPlacement(ccol - offset)) {
+                        createGroundCactus(ccol - offset);
+                        placed = true;
+                    }
+                }
+            }
         }
     }
     
-    // Cria instância do zoológico para renderização coordenada
+    // Criar instância do zoológico
     zoo = new ZooBuilding(pythonCol, flagRow + 1);
 }
 
+// Validar se um bloco pode ser colocado sem bloquear passagem
+function isValidBlockPlacement(col, row) {
+    // Não colocar bloco imediatamente acima (distância 1) de outro bloco
+    if (row < 11 && map[row + 1][col] && map[row + 1][col] !== 0) {
+        return false;
+    }
+    
+    // Verificação especial para blocos a 1 do chão (row 9)
+    if (row === 9) {
+        // Verificar se há um bloco com 3-4 blocos de distância ANTES (col-1 apenas)
+        if (col > 0) {
+            let prevBlockHeight = null;
+            for (let r = 6; r <= 10; r++) {
+                if (map[r][col - 1] && map[r][col - 1] !== 0) {
+                    prevBlockHeight = 10 - r; // Distância do chão
+                    break;
+                }
+            }
+            
+            // Se bloco anterior tem 3-4 de distância, verificar se há trampolim para escalar
+            if (prevBlockHeight && (prevBlockHeight === 3 || prevBlockHeight === 4)) {
+                // Procurar bloco em row 7 (3 blocos de distância) nos 1-3 tiles ANTES
+                let hasClimbablePlatform = false;
+                
+                for (let checkCol = Math.max(0, col - 3); checkCol < col; checkCol++) {
+                    if (map[7][checkCol] && map[7][checkCol] !== 0) {
+                        // Há um bloco em row 7 que pode servir de trampolim
+                        // Verificar se há caminho livre entre row 7 e row 9
+                        let pathClear = true;
+                        
+                        // Verificar se há obstáculos bloqueando (apenas row 8 pode bloquear)
+                        for (let checkPathCol = checkCol; checkPathCol <= col; checkPathCol++) {
+                            if (map[8][checkPathCol] && map[8][checkPathCol] !== 0) {
+                                pathClear = false;
+                                break;
+                            }
+                        }
+                        
+                        if (pathClear) {
+                            hasClimbablePlatform = true;
+                            break;
+                        }
+                    }
+                }
+                
+                // Se há bloco alto ANTES mas não tem trampolim escalável, bloqueia
+                if (!hasClimbablePlatform) {
+                    return false;
+                }
+            }
+        }
+    }
+    
+    return true;
+}
+
+// Validar se um bloco alto pode ser colocado sem bloquear buraco grande
+function isValidHighBlockPlacement(col, row) {
+    // Apenas verificar para blocos altos (row 6-7, altura 3-4)
+    if (row !== 6 && row !== 7) {
+        return true; // Blocos baixos podem ser colocados normalmente
+    }
+    
+    // Verificar se há um buraco grande (>3 blocos) abaixo deste bloco
+    const largeHoleSize = countLargeBelowBlock(col);
+    
+    if (largeHoleSize > 3) {
+        // Há buraco grande abaixo. Verificar se há trampolim (row 8) nos 1-2 tiles ANTES
+        let hasClimbablePlatformBefore = false;
+        
+        for (let checkCol = Math.max(0, col - 2); checkCol < col; checkCol++) {
+            if (map[8][checkCol] && map[8][checkCol] !== 0) {
+                // Verificar se row 8 é realmente um bloco de plataforma (tipo 2, 5, ou 4)
+                // e não é um mandacaru aéreo
+                hasClimbablePlatformBefore = true;
+                break;
+            }
+        }
+        
+        // Se não tem trampolim antes de um bloco alto sobre buraco grande, bloqueia
+        if (!hasClimbablePlatformBefore) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
+// Contar tamanho do buraco abaixo de uma coluna
+function countLargeBelowBlock(col) {
+    let holeSize = 0;
+    let inHole = false;
+    
+    for (let checkCol = col; checkCol < Math.min(col + 5, map[0].length); checkCol++) {
+        const hasGround = map[10][checkCol] || map[11][checkCol];
+        
+        if (!hasGround) {
+            holeSize++;
+            inHole = true;
+        } else {
+            if (inHole) {
+                break; // Fim do buraco
+            }
+        }
+    }
+    
+    return holeSize;
+}
+
+// Validar se um cacto pode ser colocado sem bloquear passagem
+function isValidCactusPlacement(col) {
+    // Não colocar cacto se há mandacaru (tipo 4) na coluna
+    for (let row = 0; row < map.length; row++) {
+        if (map[row][col] === 4) {
+            return false;
+        }
+    }
+    
+    // Não colocar cacto se há outro cacto muito perto (menos de 3 colunas)
+    for (const cactus of cacti) {
+        if (Math.abs(cactus.col - col) < 3) {
+            return false;
+        }
+    }
+    
+    // Não colocar cacto próximo a buraco pequeno (1-2 blocos)
+    // Verificar 2 colunas antes e depois
+    for (let checkCol = Math.max(0, col - 2); checkCol <= Math.min(map[0].length - 1, col + 2); checkCol++) {
+        if (checkCol === col) continue;
+        
+        const hasGround = map[10][checkCol] || map[11][checkCol];
+        if (!hasGround) {
+            // Há um buraco nesta coluna. Contar o tamanho do buraco
+            let holeSize = 1;
+            for (let holeCheck = checkCol + 1; holeCheck < map[0].length; holeCheck++) {
+                if (!map[10][holeCheck] && !map[11][holeCheck]) {
+                    holeSize++;
+                } else {
+                    break;
+                }
+            }
+            
+            // Se buraco é pequeno (1-2 blocos) e está próximo, bloqueia
+            if (holeSize <= 2 && Math.abs(checkCol - col) <= 1) {
+                return false;
+            }
+        }
+    }
+    
+    // Não colocar cacto em frente a plataforma muito alta sem espaço
+    // Verificar se há bloco a 3-4 de distância muito perto sem passar
+    for (let checkCol = Math.max(0, col - 1); checkCol <= Math.min(map[0].length - 1, col + 1); checkCol++) {
+        let highBlockFound = false;
+        for (let row = 6; row <= 8; row++) {
+            if (map[row][checkCol] && map[row][checkCol] !== 0) {
+                const blockHeight = 10 - row;
+                if (blockHeight >= 3) {
+                    highBlockFound = true;
+                    break;
+                }
+            }
+        }
+        
+        // Se há bloco alto muito perto sem espaço, bloqueia
+        if (highBlockFound && checkCol === col) {
+            return false;
+        }
+    }
+    
+    return true;
+}
+
 function fixMapPassability(mapWidth) {
+    // Apenas corrigir buracos MUITO grandes (mais de 3 blocos), não destruir design intencional
     let holeCount = 0;
+    let holeStart = 0;
+    
     for (let col = 0; col < mapWidth; col++) {
         const hasGround = map[10][col] || map[11][col];
         if (!hasGround) {
+            if (holeCount === 0) holeStart = col;
             holeCount++;
         } else {
-            if (holeCount > 2) {
+            // Preencher apenas buracos MUITO grandes (>4 blocos)
+            if (holeCount > 4) {
                 for (let fix = 1; fix <= holeCount; fix++) {
                     const fixCol = col - fix;
-                    map[11][fixCol] = 1;
+                    if (fixCol >= holeStart && !map[10][fixCol] && !map[11][fixCol]) {
+                        map[11][fixCol] = 1;
+                    }
                 }
             }
             holeCount = 0;
         }
     }
-    if (holeCount > 2) {
-        for (let fix = 1; fix <= holeCount; fix++) {
-            const fixCol = mapWidth - fix;
-            map[11][fixCol] = 1;
-        }
-    }
-
-    for (let col = 0; col < mapWidth; col++) {
-        let solidCount = 0;
-        for (let row = 0; row < map.length; row++) {
-            if (map[row][col] !== 0 && map[row][col] !== 7) solidCount++;
-        }
-        if (solidCount >= 3) {
-            for (let row = 6; row <= 10; row++) {
-                if (map[row][col] !== 0) {
-                    map[row][col] = 0;
-                    break;
-                }
-            }
-        }
-    }
+    
+    // Não remover plataformas intermediárias - elas fazem parte do design!
+    // A verificação antiga removia plataformas intencionais
 }
 
-function startLevel(level) {
-    generateMap();
+function startLevel(level = 1) {
+    currentLevel = level;
+    generateMap(level);
     initEnemies();
     player.reset(true);
     cameraX = 0;
@@ -740,22 +912,29 @@ class Enemy {
         this.width = 35;
         this.height = 30;
         this.vx = speed;
+        this.vy = 0; // Velocidade vertical
         this.color = "#8D6E63";
         this.facing = this.vx < 0 ? -1 : 1;
         this.walkTimer = 0;
         this.bobOffset = 0;
+        this.onGround = false; // Se está em uma plataforma
     }
 
     update() {
+        // Aplicar gravidade
+        this.vy += GRAVITY;
+        
+        // Atualizar posição
         this.x += this.vx;
+        this.y += this.vy;
 
         this.walkTimer += 0.12;
         this.bobOffset = Math.sin(this.walkTimer * Math.PI) * 3;
         
-        // Verifica colisão com blocos
+        // Verificar colisão com blocos
         this.checkBlockCollisions();
         
-        // Inverte direção se sair muito do mapa
+        // Inverte direção se sair do mapa
         if (this.x < 0) {
             this.vx = Math.abs(this.vx);
             this.facing = 1;
@@ -763,9 +942,16 @@ class Enemy {
             this.vx = -Math.abs(this.vx);
             this.facing = -1;
         }
+        
+        // Matar inimigo se cair muito
+        if (this.y > canvas.height + 100) {
+            this.isDead = true;
+        }
     }
     
     checkBlockCollisions() {
+        this.onGround = false;
+        
         for (let row = 0; row < map.length; row++) {
             for (let col = 0; col < map[row].length; col++) {
                 let tile = map[row][col];
@@ -777,15 +963,33 @@ class Enemy {
                     if (this.x < tx + TILE_SIZE && this.x + this.width > tx &&
                         this.y < ty + TILE_SIZE && this.y + this.height > ty) {
                         
-                        // Empurrão lateral - inimigo não atravessa blocos
-                        if (this.vx > 0) {
-                            this.x = tx - this.width;
-                            this.vx = -1;
-                            this.facing = -1;
-                        } else if (this.vx < 0) {
-                            this.x = tx + TILE_SIZE;
-                            this.vx = 1;
-                            this.facing = 1;
+                        const overlapX = Math.min(this.x + this.width, tx + TILE_SIZE) - Math.max(this.x, tx);
+                        const overlapY = Math.min(this.y + this.height, ty + TILE_SIZE) - Math.max(this.y, ty);
+
+                        if (overlapX <= 0 || overlapY <= 0) continue;
+
+                        // Colisão vertical (chão)
+                        if (this.vy >= 0 && this.y + this.height / 2 < ty + TILE_SIZE / 2) {
+                            this.vy = 0;
+                            this.y = ty - this.height;
+                            this.onGround = true;
+                        }
+                        // Colisão vertical (teto)
+                        else if (this.vy < 0 && this.y + this.height / 2 > ty + TILE_SIZE / 2) {
+                            this.vy = 0;
+                            this.y = ty + TILE_SIZE;
+                        }
+                        // Colisão horizontal (blocos)
+                        else if (overlapX < overlapY) {
+                            if (this.vx > 0) {
+                                this.x = tx - this.width;
+                                this.vx = -1;
+                                this.facing = -1;
+                            } else if (this.vx < 0) {
+                                this.x = tx + TILE_SIZE;
+                                this.vx = 1;
+                                this.facing = 1;
+                            }
                         }
                     }
                 }
@@ -1175,8 +1379,19 @@ function initEnemies() {
     const enemyCount = 4;
 
     for (let i = 0; i < enemyCount; i++) {
-        const speed = -1.2 - Math.random() * 0.4;
-        const x = baseX + i * spacing + (Math.random() * 250 - 125);
+        const speed = -0.95 - Math.random() * 0.35; // Reduzido de -1.2 para mais controle
+        let x = baseX + i * spacing + (Math.random() * 250 - 125);
+        
+        // Evitar spawnar inimigos em colunas com obstáculos aéreos (tipo 4 - mandacaru)
+        const col = Math.floor(x / TILE_SIZE);
+        for (let row = 0; row < map.length; row++) {
+            if (map[row][col] === 4) {
+                // Há obstáculo aéreo, mover inimigo para lado seguro
+                x += TILE_SIZE * 3;
+                break;
+            }
+        }
+        
         enemies.push(new Enemy(x, enemyY, speed));
     }
 }
@@ -1437,6 +1652,12 @@ function update() {
     enemies.forEach((enemy, index) => {
         enemy.update();
         enemy.draw();
+        
+        // Remover inimigo se caiu
+        if (enemy.isDead) {
+            enemies.splice(index, 1);
+            return;
+        }
 
         // Colisão Player x Inimigo
         if (player.x < enemy.x + enemy.width && player.x + player.width > enemy.x &&
@@ -1546,8 +1767,9 @@ function startGame() {
     winScreen.classList.add('hidden');
 
     score = 0;
+    currentLevel = 1; // Começar no nível 1
     player.reset(false);
-    generateMap(); // Gera o mapa proceduralmente
+    generateMap(currentLevel); // Gera o mapa do nível 1
     initEnemies();
     cameraX = 0;
     gameActive = true;
