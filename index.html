@@ -3,187 +3,344 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mundo do Juquinha - Remaster</title>
+    <title>Mundo do Juquinha - Museu Vivo de Répteis</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 
     <style>
-        *{
-            margin:0;
-            padding:0;
-            box-sizing:border-box;
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
-        body{
-            min-height:100vh;
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            overflow:hidden;
+        :root {
+            --green-bright: #7ef0b0;
+            --green-mid:    #24a860;
+            --green-dark:   #1a7a4a;
+            --green-border: rgba(80, 200, 140, 0.35);
+            --night-deep:   #070f1a;
+            --night-mid:    #0d1b2a;
+            --night-top:    #142540;
+            --pixel: 'Press Start 2P', monospace;
+        }
+
+        body {
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background: linear-gradient(180deg, var(--night-top) 0%, var(--night-mid) 55%, var(--night-deep) 100%);
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
             background:
-                radial-gradient(circle at top,#4fc3f7 0%,#102030 70%);
-            font-family:Arial, Helvetica, sans-serif;
+                radial-gradient(rgba(180,230,255,.75) 1px, transparent 1px),
+                radial-gradient(rgba(255,255,255,.35) 1px, transparent 1px);
+            background-size: 65px 65px, 38px 38px;
+            background-position: 0 0, 22px 22px;
+            animation: stars 20s linear infinite;
+            pointer-events: none;
         }
 
-        body::before{
-            content:'';
-            position:fixed;
-            inset:0;
+        @keyframes stars {
+            from { transform: translateY(0); }
+            to   { transform: translateY(65px); }
+        }
+
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
             background:
-                radial-gradient(rgba(255,255,255,.25) 1px, transparent 1px);
-            background-size:40px 40px;
-            animation:stars 15s linear infinite;
-            opacity:.35;
+                radial-gradient(ellipse 55% 35% at 25% 65%, rgba(26,122,74,.22) 0%, transparent 70%),
+                radial-gradient(ellipse 40% 28% at 78% 28%, rgba(72,32,130,.18) 0%, transparent 70%);
+            pointer-events: none;
         }
 
-        @keyframes stars{
-            from{transform:translateY(0px);}
-            to{transform:translateY(40px);}
+        body > .ground {
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            height: 44px;
+            background: linear-gradient(180deg, #1a4030 0%, #0d2518 100%);
+            z-index: 0;
+        }
+        body > .ground::before {
+            content: '';
+            position: absolute;
+            top: -9px; left: 0; right: 0;
+            height: 11px;
+            background: repeating-linear-gradient(90deg, #2a6040 0px, #2a6040 30px, #1d4d30 30px, #1d4d30 60px);
         }
 
-        #game-container{
-            position:relative;
-            width:800px;
-            height:480px;
-            overflow:hidden;
-            border-radius:22px;
-            border:4px solid rgba(255,255,255,.25);
+        .credit {
+            position: fixed;
+            bottom: 8px;
+            font-family: var(--pixel);
+            font-size: 6px;
+            color: rgba(80,200,140,.35);
+            letter-spacing: 2px;
+            z-index: 1;
+        }
+
+        #scale-wrapper {
+            position: relative;
+            z-index: 2;
+            width: 800px;
+            height: 480px;
+            transform-origin: center center;
+        }
+
+        #game-container {
+            width: 800px;
+            height: 480px;
+            position: relative;
+            overflow: hidden;
+            border-radius: 18px;
+            border: 1.5px solid var(--green-border);
             box-shadow:
-                0 0 40px rgba(0,0,0,.55),
-                0 0 90px rgba(79,195,247,.15);
+                0 0 0 1px rgba(80,200,140,.08),
+                0 0 50px rgba(0,0,0,.7),
+                0 0 100px rgba(10,40,25,.5);
         }
 
-        canvas{
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #2c5d88 0%, #639bff 60%, #ffd28a 100%);
+        }
+
+        #ui-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .screen {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             background:
-                linear-gradient(to bottom,#63d6ff 0%,#ffd28a 75%);
+                radial-gradient(ellipse 60% 45% at 30% 70%, rgba(26,122,74,.18) 0%, transparent 70%),
+                radial-gradient(ellipse 45% 35% at 75% 25%, rgba(72,32,130,.15) 0%, transparent 70%),
+                linear-gradient(180deg, #101e30 0%, #0d1b2a 55%, #07111c 100%);
+            pointer-events: all;
         }
 
-        #ui-layer{
-            position:absolute;
-            inset:0;
-            pointer-events:none;
+        .hidden { display: none !important; }
+
+        /* ── NOVO CARD ESTILO RETRÔ ARCADE ── */
+        .menu-card {
+            background: #0b1d12;
+            border: 4px solid #1a7a4a;
+            outline: 4px solid #7ef0b0;
+            box-shadow: 0 0 25px rgba(126, 240, 176, 0.25);
+            border-radius: 0px;
+            padding: 30px 24px;
+            text-align: center;
+            min-width: 360px;
+            max-width: 440px;
         }
 
-        .screen{
-            position:absolute;
-            inset:0;
-            display:flex;
-            flex-direction:column;
-            justify-content:center;
-            align-items:center;
-            text-align:center;
-            gap:14px;
-            background:rgba(5,10,20,.72);
-            color:white;
-            backdrop-filter: blur(6px);
-            pointer-events:all;
+        .reptil-strip {
+            font-size: 24px;
+            letter-spacing: 8px;
+            margin-bottom: 12px;
+            animation: floatEmoji 4s ease-in-out infinite;
         }
 
-        .screen h1{
-            font-size:54px;
-            letter-spacing:3px;
-            text-shadow:0 0 18px rgba(255,255,255,.3);
-            animation:floatTitle 3s ease-in-out infinite;
+        @keyframes floatEmoji {
+            0%, 100% { transform: translateY(0); }
+            50%       { transform: translateY(-5px); }
         }
 
-        @keyframes floatTitle{
-            0%,100%{transform:translateY(0px);}
-            50%{transform:translateY(-8px);}
+        .screen h1 {
+            font-family: var(--pixel);
+            font-size: 16px;
+            line-height: 1.5;
+            color: #ffffff;
+            text-shadow: 3px 3px 0px #1a7a4a;
+            margin-bottom: 6px;
         }
 
-        .screen p{
-            max-width:600px;
-            line-height:1.5;
-            opacity:.95;
+        .screen-subtitle {
+            font-family: var(--pixel);
+            font-size: 8px;
+            color: var(--green-bright);
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            animation: blink 1.2s infinite;
         }
 
-        .hidden{
-            display:none;
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
         }
 
-        .menu-card{
-            background:rgba(255,255,255,.08);
-            border:1px solid rgba(255,255,255,.15);
-            border-radius:18px;
-            padding:24px;
-            box-shadow:0 10px 35px rgba(0,0,0,.3);
+        .divider {
+            height: 4px;
+            background: repeating-linear-gradient(90deg, #1a7a4a 0px, #1a7a4a 8px, transparent 8px, transparent 16px);
+            margin: 14px 0;
         }
 
-        button{
-            margin-top:10px;
-            padding:14px 28px;
-            border:none;
-            border-radius:14px;
-            cursor:pointer;
-            color:white;
-            font-size:18px;
-            font-weight:bold;
-            background:linear-gradient(135deg,#00c853,#00e676);
-            transition:.25s;
+        .tips {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin: 18px 0;
+            text-align: left;
         }
 
-        button:hover{
-            transform:translateY(-3px) scale(1.03);
-            box-shadow:0 10px 30px rgba(0,230,118,.35);
+        .tip {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-family: var(--pixel);
+            font-size: 7px;
+            line-height: 1.4;
+            color: #d0ffe8;
         }
 
-        .tips{
-            text-align:left;
-            margin-top:10px;
+        .tip-icon {
+            width: 36px;
+            height: 24px;
+            background: #142d1e;
+            border: 2px solid #24a860;
+            border-radius: 0px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            flex-shrink: 0;
+            color: var(--green-bright);
         }
 
-        .tips p{
-            margin:5px 0;
+        button {
+            width: 100%;
+            padding: 14px 0;
+            border: 2px solid #ffffff;
+            border-radius: 0px;
+            background: #24a860;
+            color: #ffffff;
+            font-family: var(--pixel);
+            font-size: 10px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            box-shadow: 0 6px 0px #146338;
+            transition: all 0.1s ease;
+            margin-top: 10px;
+            position: relative;
+        }
+
+        button:hover {
+            background: #2cc772;
+        }
+
+        button:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0px #146338;
+        }
+
+        .screen p {
+            color: rgba(180, 230, 200, .85);
+            font-family: var(--pixel);
+            font-size: 8px;
+            line-height: 1.6;
+            margin: 8px 0;
+        }
+
+        #final-score {
+            font-family: var(--pixel);
+            font-size: 10px;
+            color: #ffe066;
+            text-shadow: 2px 2px 0px #b38f00;
+            margin-top: 14px;
         }
     </style>
 </head>
 <body>
 
-<div id="game-container">
-    <canvas id="gameCanvas" width="800" height="480"></canvas>
+<div class="ground"></div>
+<span class="credit">MUSEU VIVO DE RÉPTEIS</span>
 
-    <div id="ui-layer">
+<div id="scale-wrapper">
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="480"></canvas>
 
-        <div id="start-screen" class="screen">
-            <div class="menu-card">
-                <h1>🌵 MUNDO DO JUQUINHA</h1>
-
-                <p>
-                    Explore a Caatinga, derrote criaturas e alcance a bandeira final
-                    nessa nova versão remasterizada.
-                </p>
-
-                <div class="tips">
-                    <p>🎮 A / D ou ← → para movimentar</p>
-                    <p>🦘 W / ↑ / Espaço para pular</p>
-                    <p>❤️ Agora você possui 3 corações</p>
+        <div id="ui-layer">
+            <div id="start-screen" class="screen">
+                <div class="menu-card">
+                    <div class="reptil-strip">🦎 🐊 🐍</div>
+                    <h1>MUNDO DO<br>JUQUINHA</h1>
+                    <div class="screen-subtitle">museu vivo de répteis</div>
+                    <div class="divider"></div>
+                    <div class="tips">
+                        <div class="tip">
+                            <div class="tip-icon">◀▶</div>
+                            A / D OU SETAS PARA MOVER
+                        </div>
+                        <div class="tip">
+                            <div class="tip-icon">▲</div>
+                            W / ESPAÇO PARA PULAR
+                        </div>
+                        <div class="tip">
+                            <div class="tip-icon">♥</div>
+                            VOCÊ TEM 3 VIDAS ÉPICAS
+                        </div>
+                    </div>
+                    <button onclick="startGame()">▶ INICIAR AVENTURA</button>
                 </div>
+            </div>
 
-                <button onclick="startGame()">
-                    INICIAR AVENTURA
-                </button>
+            <div id="game-over" class="screen hidden">
+                <div class="menu-card">
+                    <div class="reptil-strip">💀</div>
+                    <h1>GAME OVER</h1>
+                    <div class="screen-subtitle">o juquinha foi derrotado...</div>
+                    <div class="divider"></div>
+                    <button onclick="restartGame()">↩ TENTAR NOVAMENTE</button>
+                </div>
+            </div>
+
+            <div id="win-screen" class="screen hidden">
+                <div class="menu-card">
+                    <div class="reptil-strip">🏆</div>
+                    <h1>CONCEGUIDO!</h1>
+                    <div class="screen-subtitle">parabéns, aventureiro!</div>
+                    <div class="divider"></div>
+                    <p>Você completou a jornada pelo museu!</p>
+                    <p id="final-score">PONTUAÇÃO FINAL: 0</p>
+                    <button onclick="restartGame()" style="margin-top:16px">🔄 JOGAR NOVAMENTE</button>
+                </div>
             </div>
         </div>
-
-        <div id="game-over" class="screen hidden">
-            <div class="menu-card">
-                <h1>💀 GAME OVER</h1>
-                <p>O Juquinha foi derrotado na Caatinga...</p>
-                <button onclick="restartGame()">TENTAR NOVAMENTE</button>
-            </div>
-        </div>
-
-        <div id="win-screen" class="screen hidden">
-            <div class="menu-card">
-                <h1>� VOCÊ ALCANÇOU O ZOOLÓGICO! 🏆</h1>
-                <p style="font-size:28px; margin:10px 0;">🦊 🦁 🐻 🦒 🦓</p>
-                <p>Parabéns! Você completou a jornada na Caatinga e chegou ao zoológico!</p>
-                <p id="final-score" style="font-size: 20px; font-weight: bold; color: #FFD700; margin-top: 15px;">Pontuação Final: 0</p>
-                <p style="font-size: 14px; opacity: 0.8; margin-top: 10px;">A bandeira foi erguida! Você é um verdadeiro aventureiro!</p>
-                <button onclick="restartGame()" style="margin-top: 20px;">🔄 JOGAR NOVAMENTE</button>
-            </div>
-        </div>
-
     </div>
 </div>
+
+<script>
+    function scaleGame() {
+        const wrapper = document.getElementById('scale-wrapper');
+        const W = 800, H = 480;
+        const scaleX = window.innerWidth  / W;
+        const scaleY = window.innerHeight / H;
+        const scale  = Math.min(scaleX, scaleY, 1);
+        wrapper.style.transform = `scale(${scale})`;
+        const vpad = (window.innerHeight - H * scale) / 2;
+        wrapper.style.marginTop = vpad > 0 ? vpad + 'px' : '0';
+    }
+    scaleGame();
+    window.addEventListener('resize', scaleGame);
+</script>
 
 <script src="game.js"></script>
 </body>

@@ -1612,7 +1612,11 @@ function update() {
     // efeito de câmera suave
     canvas.style.transform = `translateY(${Math.sin(Date.now() * 0.003) * 1.5}px)`;
 
-    if (!gameActive) return;
+    if (!gameActive) {
+        canvas.style.visibility = 'hidden';
+        return;
+    }
+    canvas.style.visibility = 'visible';
     if (gameWon) return; // Pausa se ganhou
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
